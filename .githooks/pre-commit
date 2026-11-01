@@ -1,0 +1,12 @@
+#!/bin/sh
+# Rejects secret files even when they were force-added past .gitignore.
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+blocked=$(printf '%s\n' "$staged" | grep -Ei '(^|/)(\.env(\..*)?|[^/]*\.env|\.envrc|[^/]*\.(pem|key)|[^/]*(service-account|firebase-adminsdk)[^/]*\.json|application_default_credentials\.json)$' | grep -Ev '(^|/)\.env\.example$')
+
+if [ -n "$blocked" ]; then
+  echo "Commit rejected. These files must never be committed:" >&2
+  printf '  %s\n' "$blocked" >&2
+  echo "Unstage them with: git restore --staged <file>" >&2
+  exit 1
+fi

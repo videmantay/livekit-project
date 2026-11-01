@@ -1,0 +1,31 @@
+# Secrets: this is a public repo. Only .env.example files may be committed.
+.env
+.env.*
+*.env
+!.env.example
+.envrc
+*.pem
+*.key
+*service-account*.json
+*firebase-adminsdk*.json
+application_default_credentials.json
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+
+# Firebase
+.firebase/
+*-debug.log
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

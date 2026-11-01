@@ -1,0 +1,15 @@
+[project]
+name = "portfolio-agent"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "livekit-agents[elevenlabs,google,silero,tavus]>=1.8.10",
+    "python-dotenv>=1.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
+    "ruff>=0.17.3",
+]
