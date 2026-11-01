@@ -29,3 +29,12 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Claude Code local config
+.claude/
+
+# GitHub Actions
+.github/workflows/*.yml
+.githooks/*
+.mcp.json
+skills-lock.json

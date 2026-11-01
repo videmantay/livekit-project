@@ -1,11 +1,17 @@
 [project]
 name = "portfolio-agent"
 version = "0.1.0"
+description = "LiveKit Cloud agent for the portfolio's AI twin: Tavus avatar, ElevenLabs voice, and Gemini."
+readme = "README.md"
+authors = [{ name = "Lee ViDemantay" }]
 requires-python = ">=3.14"
 dependencies = [
     "livekit-agents[elevenlabs,google,silero,tavus]>=1.8.10",
     "python-dotenv>=1.2.4",
 ]
+
+[project.urls]
+Repository = "https://github.com/videmantay/livekit-project"
 
 [dependency-groups]
 dev = [
