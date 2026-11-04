@@ -120,10 +120,14 @@ As an invited visitor, I can speak with the avatar about Lee's experience and en
 
 As an invited visitor and as Lee, we need the avatar to stay within public information and never commit Lee to anything.
 
-- ⬜ The agent knows only the résumé and other material Lee marks public
+- ⬜ The agent knows only the material Lee has marked public and verified
 - ⬜ It sends offers, pay, start dates and availability to Lee directly
 - ⬜ It has no database access, no tools that read data, and can't see other sessions
 - ⬜ Prompt-extraction and commitment attempts are tested
+- ⬜ It says Lee lacks a skill the fact file lists as a "no", such as Microsoft Server (ADR-19)
+- ⬜ It declines general technical questions and anything the fact file doesn't cover, and points me to Lee
+- ⬜ Security answers stay within Lee's written application-level notes
+- ⬜ Grounding tests, including pushy follow-ups, block a deploy when they fail
 
 ### I9. My invite has a limit, and failures are handled
 
@@ -142,6 +146,20 @@ As an invited visitor, my data is deleted automatically, and I can ask for it to
 - ⚠️ TTL is configured but not deployed, and the emulator doesn't run it, so nothing is being deleted yet
 - ⬜ Transcripts and summaries get the same `delete_at`
 - ⬜ The deletion request process exists (A7)
+
+### I11. I get an honest picture of Lee's languages
+
+As an invited visitor, I can see Lee's real language level, so the avatar's speech doesn't mislead me.
+
+- ⬜ The avatar states Spanish as fluent and Portuguese as B2 (ADR-20)
+- ⬜ The call screen shows a clip labelled "Lee's real voice, unedited"
+- ⬜ Asked to speak Portuguese or translate, the avatar stays in English, gives the level and points to the clip
+- ⬜ Spoken to in another language, the avatar replies in English
+- ⬜ Portuguese speech is tested against the agent's speech recognition
+- ⬜ Later: a Portuguese question can get a prepared answer, played word for word from Lee's recording
+- ⬜ Later: before the first prepared answer, I hear that it's Lee's real voice, recorded in advance, and that Lee's conversational Portuguese is about B2
+- ⬜ Later: a Portuguese question with no prepared answer gets an English reply, or Spanish if I asked for Spanish
+- ⬜ The avatar never generates Portuguese
 
 ## Admin
 
@@ -187,6 +205,7 @@ As the admin, I read a short summary of each conversation and can compare it wit
 - ⬜ `cloud-run` writes the summary when the call ends
 - ⬜ The summary step has no tools and treats the transcript as untrusted input
 - ⬜ The summary links to its transcript
+- ⬜ The summary lists the questions the avatar declined (ADR-19)
 
 ### A6. I can review conversations and contacts
 
@@ -207,7 +226,8 @@ As the admin, I can delete one person's data when they ask.
 
 As the admin, I decide what the avatar can repeat, assuming a visitor can extract all of it.
 
-- ⬜ Knowledge base kept as a file reviewed before each agent deploy, with résumé content only
+- ⬜ Fact file reviewed before each agent deploy, holding only what I've marked public and verified
+- ⬜ Each entry gives a topic, level, what's verified and its limits, and skills I lack are listed too (ADR-19)
 
 ### A9. Secrets stay out of this public repo
 

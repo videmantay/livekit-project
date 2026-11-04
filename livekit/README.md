@@ -6,4 +6,4 @@ The AI twin, deployed to LiveKit Cloud. It joins only rooms dispatched by the `c
 
 Copy `.env.example` to `.env` for local development. In production, store these values as LiveKit Cloud agent secrets.
 
-Anything in the agent's prompt can be extracted by a visitor, so it should only contain information that's already public.
+Anything in the agent's prompt can be extracted by a visitor, so it should only contain information that's already public. It must also be verified by Lee, because the agent answers only from that material (ADR-19).

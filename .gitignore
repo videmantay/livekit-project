@@ -30,8 +30,15 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Claude Code local config
+# Per-target TODOs are kept local
+cloud-run/TODO.md
+livekit/TODO.md
+firebase/TODO.md
+
+# Claude Code local config and instructions (kept private for now)
 .claude/
+CLAUDE.md
+CLAUDE.local.md
 
 # GitHub Actions
 .github/workflows/*.yml

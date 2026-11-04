@@ -1,6 +1,6 @@
 # Architecture decisions
 
-**Accepted** decisions are agreed. Some aren't built yet, which is noted in their status or in [TODO.md](TODO.md).
+**Accepted** decisions are agreed. Some aren't built yet, which is noted in their status.
 
 | # | Decision | Status |
 |---|---|---|
@@ -22,6 +22,8 @@
 | 16 | No request-access form | Accepted |
 | 17 | First release scope | Accepted |
 | 18 | Tag releases on `main`, one version for the repo | Accepted |
+| 19 | The agent answers only from verified facts | Accepted |
+| 20 | Show language levels with real proof, not AI speech | Accepted |
 
 ## ADR-1: One folder per deploy target
 
@@ -85,7 +87,7 @@ Visitor camera is out, because the agent doesn't need it and it adds privacy exp
 
 **Decision:** Store `invites`, `sessions`, `sessions/{id}/transcript` and `contacts`. Keep text only, with no audio or video. Contacts stay apart from transcripts. Everything about a visitor gets a `delete_at`, and Firestore TTL removes it. Deletion requests are honoured sooner.
 
-**Consequences:** The 90-day promise isn't enforced until the TTL config is deployed. Summaries are stored on the session, so they go with it. Invites have no `delete_at` yet, and their labels can name a person (see [TODO.md](TODO.md)).
+**Consequences:** The 90-day promise isn't enforced until the TTL config is deployed. Summaries are stored on the session, so they go with it. Invites have no `delete_at` yet, and their labels can name a person.
 
 ## ADR-7: Everything the agent knows is treated as public
 
@@ -93,9 +95,9 @@ Visitor camera is out, because the agent doesn't need it and it adds privacy exp
 
 **Context:** A visitor can eventually get the agent to repeat whatever is in its prompt.
 
-**Decision:** The agent gets résumé content and anything else Lee marks public. Salary history, private contact details and notes on invitees stay out. It must not agree to offers, pay, start dates or availability, and sends those to Lee.
+**Decision:** The agent gets only what Lee has marked both public and verified, which comes from the résumé and anything else Lee adds (ADR-19). Salary history, private contact details and notes on invitees stay out. It must not agree to offers, pay, start dates or availability, and sends those to Lee.
 
-**Consequences:** Knowledge changes are reviewed before each agent deploy.
+**Consequences:** Knowledge changes are reviewed before each agent deploy. Being on the résumé makes something public, but not automatically verified.
 
 ## ADR-8: Contact details come through a form
 
@@ -199,7 +201,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 **Decision:** The first release is English only, because each language needs its own reviewed consent text. It has no visitor recap page, because a recap needs its own access control and a mention in the terms. It has no shared-links panel, because that isn't needed to prove the flow.
 
-**Consequences:** Spanish and Portuguese, the recap and shared links each get their own decision later.
+**Consequences:** Spanish and Portuguese, the recap and shared links each get their own decision later. ADR-20 sets the limits for that language decision.
 
 ## ADR-18: Tag releases on `main`, one version for the repo
 
@@ -210,3 +212,39 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 **Decision:** Tag `v0.1.0` on `main` when the full flow works end to end: invite, consent, call and saved transcript. Use annotated tags and one version across all three targets. Move to `v1.0.0` when invites go to real employers.
 
 **Consequences:** `dev` must merge to `main` before each release.
+
+## ADR-19: The agent answers only from verified facts
+
+**Status:** Accepted, not built
+
+**Context:** Given only a résumé, the model confidently answered cybersecurity questions Lee couldn't answer. A résumé says what Lee has done, not what Lee hasn't, so the model fills the gaps from its own knowledge. Anything it says in Lee's voice sounds like Lee's expertise, and that oversells Lee to recruiters.
+
+**Decision:** The agent's knowledge is a fact file that Lee reviews entry by entry. Each entry gives a topic, a level, what's verified and its limits. The file also lists skills Lee doesn't have, so a "no" is stated rather than guessed.
+
+- Questions about Lee are answered only from the file.
+- General technical questions aren't answered from the model's own knowledge, even when it knows the answer.
+- Application-level security answers come from notes Lee wrote, so the model doesn't decide what counts as "application level".
+- If something isn't covered, the agent says so plainly and points the visitor to Lee, without guessing or implying Lee knows it.
+- The whole file sits in the prompt, with no retrieval, because a missed lookup is when the model would improvise.
+- Grounding tests run before each agent deploy, and a failure blocks it. They include unit tests with LLM judges, and simulated recruiters who push on missing skills.
+- Each call summary lists the questions the agent declined, so Lee can decide what to verify and add.
+
+**Alternative rejected:** A second model checking each answer during the call adds delay to a voice conversation. Tests and transcript review come first, and this can be revisited if they miss too much.
+
+**Consequences:** Hallucinations are reduced, not eliminated, so transcript review stays part of the design. The avatar will decline questions a recruiter might expect it to handle. Declined questions must be identifiable in the transcript for the summary step to list them.
+
+## ADR-20: Show language levels with real proof, not AI speech
+
+**Status:** Accepted, not built
+
+**Context:** Lee's Spanish is fluent and Lee's Portuguese is about B2. Portuguese generated by the avatar would sound far better than B2 in a clone of Lee's voice, which misleads visitors. Making the AI add mistakes on purpose would be fake too. Lee still wants visitors to be able to hear real Portuguese.
+
+**Decision:** The avatar never generates Portuguese. The fact file states each level, and the call screen shows a short, unscripted clip labelled "Lee's real voice, unedited". The clip is a static asset and collects nothing from visitors. The rollout has three stages:
+
+1. **First release:** English only (ADR-17). If asked to speak Portuguese, the avatar stays in English, gives Lee's level and points to the clip. It replies in English to any language and doesn't translate on request.
+2. **Next:** the avatar can answer a Portuguese question with one of 8–12 prepared answers, each recorded by Lee. The model only picks the answer, and code plays the recording word for word. The first one is preceded by a note that this is Lee's real voice, recorded in advance, and that Lee's conversational Portuguese is about B2. Any question without a matching answer gets an English reply.
+3. **After that:** the avatar can speak Spanish when a visitor asks, because that matches Lee's real level, once the translated consent text is reviewed. A Portuguese question without a matching answer then gets a Spanish reply if the visitor has asked for Spanish.
+
+**Alternative rejected:** Speaking Lee's written answers through the AI voice would use Lee's words, but the delivery would still sound better than B2.
+
+**Consequences:** Lee has to record the clip, the answers and the note. Stage 2 depends on Portuguese speech recognition and on the Tavus avatar lip-syncing to recorded audio, and neither has been tested. Prepared answers sound smoother than spontaneous speech, so the note and the unscripted clip both stay. Recordings of Lee's voice are personal data that Lee chooses to publish, so they go through the knowledge review.
