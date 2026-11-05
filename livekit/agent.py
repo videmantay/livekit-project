@@ -12,6 +12,7 @@ Run it:
 """
 
 import os
+from collections.abc import AsyncIterable
 
 from dotenv import load_dotenv
 from livekit import agents
@@ -19,12 +20,15 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
-    TurnHandlingOptions,
+    APIStatusError,
+    ModelSettings,
     inference,
+    llm,
     room_io,
 )
 from livekit.plugins import ai_coustics, elevenlabs, google, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
 load_dotenv()
 
 # Explicit dispatch (U3): with a name set, the agent only joins rooms it is dispatched to.
@@ -32,6 +36,29 @@ AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "portfolio-twin")
 
 # No default voice: the twin must never fall back to a stock voice by accident.
 ELEVENLABS_VOICE_ID = os.environ["ELEVENLABS_VOICE_ID"]
+
+# Strictest level on every adjustable Gemini filter. Unset categories default to off on Gemini
+# 2.5 and later. Gemini has no profanity or child-safe filter, so the prompt covers those.
+GEMINI_SAFETY_SETTINGS = [
+    {"category": category, "threshold": "BLOCK_LOW_AND_ABOVE"}
+    for category in (
+        "HARM_CATEGORY_HARASSMENT",
+        "HARM_CATEGORY_HATE_SPEECH",
+        "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "HARM_CATEGORY_JAILBREAK",
+    )
+]
+
+# Spoken in place of a reply Gemini blocked, once per blocked turn.
+BLOCKED_REPLY = "That's not something I can talk about, but I'm happy to tell you about Lee's work."
+
+
+def _is_safety_block(error: APIStatusError) -> bool:
+    # The Google plugin raises these two messages for a blocked reply and a blocked prompt.
+    return error.message.startswith("generation blocked by gemini") or (
+        '"block_reason"' in error.message
+    )
 
 
 class Assistant(Agent):
@@ -43,6 +70,35 @@ class Assistant(Agent):
                 "in plain spoken English, with no lists, emojis or symbols."
             ),
         )
+        # User messages Gemini blocked. They stay in the transcript but are never sent again,
+        # or one blocked turn would block every turn after it.
+        self._blocked_message_ids: set[str] = set()
+
+    async def llm_node(
+        self,
+        chat_ctx: llm.ChatContext,
+        tools: list[llm.Tool],
+        model_settings: ModelSettings,
+    ) -> AsyncIterable[llm.ChatChunk | str]:
+        chat_ctx = chat_ctx.copy()
+        for message_id in self._blocked_message_ids:
+            if chat_ctx.index_by_id(message_id) is not None:
+                chat_ctx.remove(message_id)
+
+        replied = False
+        try:
+            async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+                replied = True
+                yield chunk
+        except APIStatusError as error:
+            if not _is_safety_block(error):
+                raise
+            user_messages = [m for m in chat_ctx.messages() if m.role == "user"]
+            if user_messages:
+                self._blocked_message_ids.add(user_messages[-1].id)
+            # A reply blocked partway has already been spoken up to the block; don't add to it.
+            if not replied:
+                yield BLOCKED_REPLY
 
 
 server = AgentServer()
@@ -57,6 +113,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         llm=google.LLM(
             model="gemini-3.5-flash",
             thinking_config={"thinking_level": "minimal"},
+            safety_settings=GEMINI_SAFETY_SETTINGS,
         ),
         # English only (ADR-20).
         tts=elevenlabs.TTS(voice_id=ELEVENLABS_VOICE_ID, language="en"),
