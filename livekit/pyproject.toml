@@ -6,7 +6,8 @@ readme = "README.md"
 authors = [{ name = "Lee ViDemantay" }]
 requires-python = ">=3.14"
 dependencies = [
-    "livekit-agents[elevenlabs,google,silero,tavus]>=1.8.10",
+    "livekit-agents[elevenlabs,google,silero,tavus,turn-detector]>=1.8.10",
+    "livekit-plugins-ai-coustics>=0.3.5",
     "python-dotenv>=1.2.4",
 ]
 

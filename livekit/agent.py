@@ -21,9 +21,10 @@ from livekit.agents import (
     AgentSession,
     TurnHandlingOptions,
     inference,
+    room_io,
 )
-from livekit.plugins import elevenlabs, google
-
+from livekit.plugins import ai_coustics, elevenlabs, google, silero
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
 load_dotenv()
 
 # Explicit dispatch (U3): with a name set, the agent only joins rooms it is dispatched to.
@@ -51,18 +52,33 @@ server = AgentServer()
 async def entrypoint(ctx: agents.JobContext) -> None:
     session = AgentSession(
         stt=inference.STT(model="assemblyai/universal-3-6-pro", language="en"),
-        # Minimal thinking keeps voice replies fast.
+        # Minimal thinking keeps voice replies fast. Gemini 3 takes a level only; there is no
+        # time cap. Raise to "low" only if answers from the fact file need more reasoning.
         llm=google.LLM(
             model="gemini-3.5-flash",
             thinking_config={"thinking_level": "minimal"},
         ),
         # English only (ADR-20).
         tts=elevenlabs.TTS(voice_id=ELEVENLABS_VOICE_ID, language="en"),
-        turn_handling=TurnHandlingOptions(turn_detection=inference.TurnDetector()),
+        # Explicit, though it matches the SDK default, so a default change can't alter it quietly.
+        vad=silero.VAD.load(),
+        turn_detection=MultilingualModel(),
         use_tts_aligned_transcript=True,
     )
 
-    await session.start(room=ctx.room, agent=Assistant())
+    await session.start(
+        room=ctx.room,
+        agent=Assistant(),
+        room_options=room_io.RoomOptions(
+            audio_input=room_io.AudioInputOptions(
+                # Voice isolation for one visitor on a laptop mic. It runs before VAD, STT and
+                # turn detection. The frontend must not add its own Krisp filter on top.
+                noise_cancellation=ai_coustics.audio_enhancement(
+                    model=ai_coustics.EnhancerModel.QUAIL_VF_S,
+                ),
+            ),
+        ),
+    )
     await session.generate_reply(instructions="Greet the user briefly and ask how you can help.")
 
 
