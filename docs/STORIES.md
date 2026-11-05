@@ -226,8 +226,20 @@ As the admin, I can delete one person's data when they ask.
 
 As the admin, I decide what the avatar can repeat, assuming a visitor can extract all of it.
 
-- ⬜ Fact file reviewed before each agent deploy, holding only what I've marked public and verified
+- ⬜ The agent gets only entries I've published, never drafts (ADR-21)
 - ⬜ Each entry gives a topic, level, what's verified and its limits, and skills I lack are listed too (ADR-19)
+- ⬜ Facts page in `/admin` where I edit drafts and publish them, with no deploy (ADR-21)
+- ⬜ Each publish is a numbered version, and I can roll back to an earlier one in one step
+- ⬜ A published change reaches the next call, and each transcript records the version used
+- ⬜ If `cloud-run` can't be reached, the agent uses the last version it fetched, and ends the call politely if it has none
+- ⬜ Grounding tests run against the published facts before each deploy and nightly, and a failure notifies me
+
+### A10. I can turn declined questions into facts
+
+As the admin, I can add an answer for a question the avatar declined, so the next visitor gets it.
+
+- ⬜ Each declined question in a summary has an "Add as fact" action (ADR-19, ADR-21)
+- ⬜ It opens a draft with the question filled in, copying nothing about who asked
 
 ### A9. Secrets stay out of this public repo
 

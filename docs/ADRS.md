@@ -24,6 +24,7 @@
 | 18 | Tag releases on `main`, one version for the repo | Accepted |
 | 19 | The agent answers only from verified facts | Accepted |
 | 20 | Show language levels with real proof, not AI speech | Accepted |
+| 21 | Facts are edited in admin and fetched at call start | Accepted |
 
 ## ADR-1: One folder per deploy target
 
@@ -219,14 +220,14 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 **Context:** Given only a résumé, the model confidently answered cybersecurity questions Lee couldn't answer. A résumé says what Lee has done, not what Lee hasn't, so the model fills the gaps from its own knowledge. Anything it says in Lee's voice sounds like Lee's expertise, and that oversells Lee to recruiters.
 
-**Decision:** The agent's knowledge is a fact file that Lee reviews entry by entry. Each entry gives a topic, a level, what's verified and its limits. The file also lists skills Lee doesn't have, so a "no" is stated rather than guessed.
+**Decision:** The agent's knowledge is a set of facts that Lee reviews entry by entry. Each entry gives a topic, a level, what's verified and its limits. The set also lists skills Lee doesn't have, so a "no" is stated rather than guessed. ADR-21 sets where the facts live and how Lee edits them.
 
 - Questions about Lee are answered only from the file.
 - General technical questions aren't answered from the model's own knowledge, even when it knows the answer.
 - Application-level security answers come from notes Lee wrote, so the model doesn't decide what counts as "application level".
 - If something isn't covered, the agent says so plainly and points the visitor to Lee, without guessing or implying Lee knows it.
-- The whole file sits in the prompt, with no retrieval, because a missed lookup is when the model would improvise.
-- Grounding tests run before each agent deploy, and a failure blocks it. They include unit tests with LLM judges, and simulated recruiters who push on missing skills.
+- The whole published set sits in the prompt, with no retrieval, because a missed lookup is when the model would improvise.
+- Grounding tests run before each agent deploy, and a failure blocks it. They also run nightly against the published facts (ADR-21). They include unit tests with LLM judges, and simulated recruiters who push on missing skills.
 - Each call summary lists the questions the agent declined, so Lee can decide what to verify and add.
 
 **Alternative rejected:** A second model checking each answer during the call adds delay to a voice conversation. Tests and transcript review come first, and this can be revisited if they miss too much.
@@ -248,3 +249,24 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 **Alternative rejected:** Speaking Lee's written answers through the AI voice would use Lee's words, but the delivery would still sound better than B2.
 
 **Consequences:** Lee has to record the clip, the answers and the note. Stage 2 depends on Portuguese speech recognition and on the Tavus avatar lip-syncing to recorded audio, and neither has been tested. Prepared answers sound smoother than spontaneous speech, so the note and the unscripted clip both stay. Recordings of Lee's voice are personal data that Lee chooses to publish, so they go through the knowledge review.
+
+## ADR-21: Facts are edited in admin and fetched at call start
+
+**Status:** Accepted, not built
+
+**Context:** Lee will update the facts from time to time, often after seeing a question the avatar declined. Editing a file in the repo and redeploying the agent for each change is slow, and the repo is public, so the facts' whole history would sit in git.
+
+**Decision:** The facts live in Firestore and are edited on the admin page. Under ADR-2, `cloud-run` does all reads and writes.
+
+- Each entry is a draft or published. Only published entries ever reach the agent.
+- Publishing creates a numbered version of the whole set. Lee can roll back to any earlier version in one step.
+- When a call starts, the agent fetches the current published version from a signed `cloud-run` endpoint, the same way it sends transcripts. The whole set goes into the prompt for the call, as ADR-19 requires. Nothing is fetched per question.
+- The agent keeps the last version it fetched. If the fetch fails, it uses that version. If it has none, it apologises and ends the call, because it can't answer without facts.
+- Each transcript records the fact version the agent used, so Lee knows what it knew at the time.
+- Each declined question in a summary (ADR-19, A5) has an "Add as fact" action that opens a draft with the question filled in. The draft copies only the question, never who asked it.
+- Publishing takes effect on the next call, with no deploy. The grounding tests fetch the published facts, run before each agent deploy, and run nightly. A nightly failure notifies Lee, who fixes the entry or rolls back.
+- The résumé-based draft in `livekit/facts/lee.yaml` is imported once to seed Firestore, then deleted from the repo.
+
+**Alternative rejected:** Running the grounding tests on every publish, and going live only if they pass. It's safer, but each edit would wait minutes and cost a test run, and it needs `cloud-run` to trigger CI. Lee is the only author and reviewer, so a nightly check and one-step rollback are enough for now.
+
+**Consequences:** A bad edit can be live until the nightly run catches it or Lee notices. The agent can't start a call while `cloud-run` is down and it has no cached version, but `cloud-run` issues the tokens anyway, so no call could start then. Facts are Lee's own content, not visitor data, so they have no `delete_at`. Anything published is still treated as public (ADR-7).
