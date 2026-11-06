@@ -1,17 +1,19 @@
-"""Basic voice agent for checking the audio pipeline locally.
+"""Voice and video agent for checking the pipeline.
 
 Pipeline: LiveKit Inference STT -> Gemini 3.5 Flash (Google plugin, own key)
--> ElevenLabs TTS (plugin, own key). It is not the twin yet: no Tavus and no
-fact file. Those come later.
+-> ElevenLabs TTS (plugin, own key) -> Tavus avatar, which lip-syncs to that
+audio. It is not the twin yet: no fact file. That comes later.
 
-Needs GOOGLE_API_KEY, ELEVEN_API_KEY and ELEVENLABS_VOICE_ID in .env.
+Needs GOOGLE_API_KEY, ELEVEN_API_KEY and ELEVENLABS_VOICE_ID in .env, plus
+TAVUS_API_KEY and TAVUS_FACE_ID for the avatar.
 
 Run it:
-    uv run agent.py console   # talk to it in this terminal, nothing else needed
-    uv run agent.py dev       # connect to LiveKit Cloud, then use the Agent Console
+    uv run agent.py console   # voice only in this terminal; console has no room, so no avatar
+    uv run agent.py dev       # connect to LiveKit Cloud, then see the avatar in the Agent Console
 """
 
 import os
+import random
 from collections.abc import AsyncIterable
 
 from dotenv import load_dotenv
@@ -26,8 +28,10 @@ from livekit.agents import (
     llm,
     room_io,
 )
-from livekit.plugins import ai_coustics, elevenlabs, google, silero
+from livekit.plugins import ai_coustics, elevenlabs, google, silero, tavus
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+from persona import GREETINGS, VOICE_NOTES
 
 load_dotenv()
 
@@ -36,6 +40,9 @@ AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "portfolio-twin")
 
 # No default voice: the twin must never fall back to a stock voice by accident.
 ELEVENLABS_VOICE_ID = os.environ["ELEVENLABS_VOICE_ID"]
+
+# How long the greeting waits for the avatar's video before the call fails.
+AVATAR_JOIN_TIMEOUT_SECONDS = 30.0
 
 # Strictest level on every adjustable Gemini filter. Unset categories default to off on Gemini
 # 2.5 and later. Gemini has no profanity or child-safe filter, so the prompt covers those.
@@ -65,7 +72,7 @@ class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
             instructions=(
-                "You are an AI voice assistant used to test audio on a developer's machine. "
+                f"{VOICE_NOTES} "
                 "Say you are an AI if asked. Keep replies to one or two short sentences, "
                 "in plain spoken English, with no lists, emojis or symbols."
             ),
@@ -123,6 +130,16 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         use_tts_aligned_transcript=True,
     )
 
+    avatar: tavus.AvatarSession | None = None
+    if not ctx.is_fake_job():
+        # No default face, for the same reason as the voice: without a face ID the plugin
+        # shows a stock Tavus face. Read here, not at import, so console runs without it.
+        # The stock PAL is used: echo mode, so Tavus only moves the face to our audio and
+        # never hears the visitor or writes replies. The plugin removes the avatar on shutdown.
+        avatar = tavus.AvatarSession(face_id=os.environ["TAVUS_FACE_ID"])
+        # Before session.start, so agent audio goes to the avatar and not straight to the room.
+        await avatar.start(session, room=ctx.room)
+
     await session.start(
         room=ctx.room,
         agent=Assistant(),
@@ -136,7 +153,13 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             ),
         ),
     )
-    await session.generate_reply(instructions="Greet the user briefly and ask how you can help.")
+    if avatar is not None:
+        # The greeting waits for the face, so the visitor sees who is talking. Raises after the
+        # timeout, which ends the call.
+        await avatar.wait_for_join(timeout=AVATAR_JOIN_TIMEOUT_SECONDS)
+    # Lee's own words, spoken as written, and not interruptible so the AI disclosure is always
+    # heard in full (ADR-8, I6).
+    await session.say(random.choice(GREETINGS), allow_interruptions=False)
 
 
 if __name__ == "__main__":
