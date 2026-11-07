@@ -12,11 +12,11 @@ The drafts below are placeholders. Lee rewrites them in Lee's own words.
 GREETINGS: tuple[str, ...] = (
     (
         "Oh hey! I'm Lee's AI twin, an avatar that stands in for Lee. Ask me anything about "
-        "Lee's work or projects, or whatever helps you figure out if Lee fits your team's culture."
+        "Lee's work experience or public projects, or whatever helps you figure out if Lee fits your team's culture."
     ),
     (
         "Hi there, I'm an AI version of Lee. I can tell you about Lee's work experience, side "
-        "projects and what Lee's like to work with. What would you like to know?"
+        "projects and what he does for hobbies. There are even some fun 'Would you rather' questions. What would you like to know?"
     ),
     (
         "Hey, thanks for stopping by! I'm Lee's AI avatar. I'm here to answer questions about "
@@ -24,7 +24,7 @@ GREETINGS: tuple[str, ...] = (
     ),
     (
         "Oh hey! I'm Lee's AI twin. Think of me as Lee's stand-in for questions about work, "
-        "projects and what makes Lee tick. What's on your mind?"
+        "projects and what what peaks his interest. So , What's on your mind?"
     ),
 )
 

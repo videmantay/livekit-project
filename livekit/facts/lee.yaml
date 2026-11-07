@@ -21,6 +21,7 @@ version: 1
 source_documents:
   - FDE résumé, Nov 2026
 
+
 profile:
   - topic: Current role and focus
     level: Senior
@@ -31,9 +32,9 @@ profile:
       Open to travel and on-site customer deployment.
     limits: >
       Don't discuss availability, start dates, pay or offers. Send those to Lee
-      (ADR-7, ADR-11).
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Years of experience
     level: 7+ years as a software engineer, plus 6 years as a teacher and coordinator
@@ -42,7 +43,8 @@ profile:
       at LAUSD from 2013 to 2019.
     limits: Don't round up or merge the teaching years into engineering years.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Security clearance
     level: Holds a Top Secret clearance
@@ -51,7 +53,8 @@ profile:
       State only that Lee holds it. Never discuss programs, projects, sites or
       anything classified, and don't speculate about what the work involves.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
 experience:
   - topic: Lockheed Martin, Senior Software Engineer (June 2021 – present)
@@ -62,16 +65,16 @@ experience:
       Shadowed users' manual workflow, then built a React platform for 3D model
       requests with secure auth and role-based access, which removed the
       coordination overhead. Built C++ and Python data pipelines that bring
-      program data together into real-time analytics for decision-makers. Is
-      the on-site technical contact for new users and teammates (onboarding,
-      training, iterating on feedback). Led the team's adoption of AI-assisted
-      development (Claude, Gemini, OpenAI) through hands-on training. Owns the
-      testing infrastructure (Pytest, JUnit, Mockito, Playwright).
+      program data together into real-time analytics for decision-makers. Built
+      Web application using FastAPI ( a Python server used in AI products). 
+
+
     limits: >
       The work is military operational analysis. Don't name programs, describe
       missions, or add detail beyond this entry. Don't invent metrics.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: JT4, Computer Scientist (Feb 2020 – June 2021)
     level: Mid-level
@@ -81,7 +84,8 @@ experience:
       migration in a live, mission-supporting environment.
     limits: Don't describe the test range or its missions.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Integrits Corporation, Software Engineer (Jan 2019 – Feb 2020)
     level: Early-career
@@ -91,7 +95,8 @@ experience:
       teams' delivery.
     limits: Don't name clients.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Schooliki, Founder and sole engineer (2022 – present)
     level: Founder, full ownership
@@ -105,18 +110,18 @@ experience:
     limits: >
       It's in beta. Don't claim user counts, revenue, funding or school names.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Antelope Valley College, Adjunct Professor (Aug 2024 – present)
     level: Adjunct faculty
     verified: >
-      Teaches computer science and technical communication, including prompt
-      engineering and how to critically evaluate AI output. Built and deployed
-      a pronunciation trainer on Azure Cognitive Speech that real students use,
-      from requirements to production.
+      Teaches computer application and ESL (English as a Second Language).
+      Used several AI tools to optimize workflow. 
     limits: Don't name students or describe specific classes beyond this.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: LAUSD, Magnet Coordinator and Lead Teacher (2013 – 2019)
     level: Lead teacher and coordinator
@@ -126,59 +131,67 @@ experience:
       integrated with Schoology, on Google App Engine.
     limits: Don't name schools.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
 skills:
   # Levels below are placeholders from the résumé. Lee should replace each with
   # an honest level, e.g. "daily, production", "used on one project", "rusty".
   - topic: Python
-    level: Professional (needs Lee's level)
+    level: Professional 
     verified: Data pipelines at Lockheed Martin; backend work on Schooliki; Pytest.
-    limits: ""
+    limits: "No data science experience."
     source: resume
     reviewed: false
 
+
   - topic: TypeScript and JavaScript, React
-    level: Professional (needs Lee's level)
+    level: Professional 
     verified: React platform at Lockheed Martin; Schooliki frontend (React, Vite, Mantine).
     limits: ""
     source: resume
     reviewed: false
 
+
   - topic: Java
-    level: Needs Lee's level
+    level: Professional
     verified: Listed on the résumé; JUnit and Mockito testing at Lockheed Martin.
     limits: ""
     source: resume
     reviewed: false
 
+
   - topic: C++
-    level: Needs Lee's level
+    level: Intermediate
     verified: Data pipelines at Lockheed Martin.
-    limits: ""
+    limits: "Only worked with C++ for two years"
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: C# and .NET
     level: Needs Lee's level
     verified: Applications at JT4 (2020–2021).
     limits: Last used professionally in 2021.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: SQL and Oracle
-    level: Needs Lee's level
+    level: Intermediate
     verified: Oracle applications at JT4.
-    limits: ""
+    limits: "Can normalize tables up to level 3. Was never a DBA"
     source: resume
     reviewed: false
+
 
   - topic: D3.js
     level: Needs Lee's level
     verified: Listed on the résumé.
     limits: ""
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Google Cloud (Cloud Run, App Engine, Firebase)
     level: Needs Lee's level
@@ -187,46 +200,52 @@ skills:
       App Engine at LAUSD.
     limits: ""
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: CI/CD and REST APIs
     level: Needs Lee's level
     verified: GitLab CI/CD with multi-site deployment for Schooliki.
-    limits: ""
+    limits: "Intermediate"
     source: resume
     reviewed: false
 
+
   - topic: LLM integration
-    level: Needs Lee's level
+    level: Professional
     verified: >
       Integrates Claude and Gemini in Schooliki, uses CopilotKit, and trained a
       team on AI-assisted development with Claude, Gemini and OpenAI.
     limits: ""
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Speech technology
-    level: Needs Lee's level
-    verified: Built a pronunciation trainer on Azure Cognitive Speech.
+    level: Begginer
+    verified: Built a pronunciation trainer on Azure Cognitive Speech. Using python sdk. Used other popular python libraries like ‘eng-to-ipa’.
     limits: ""
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Prompt engineering
     level: Needs Lee's level
-    verified: Teaches it at Antelope Valley College.
+    verified: Used daily at Lockheed Martin and work with Schooliki.
     limits: ""
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Testing
-    level: Needs Lee's level
+    level: Advanced
     verified: >
       Owns testing infrastructure at Lockheed Martin (Pytest, JUnit, Mockito,
       Playwright). Also lists Jest and TDD.
     limits: ""
     source: resume
-    reviewed: false
+    reviewed: true
+
 
 spoken_languages:
   - topic: English
@@ -234,23 +253,26 @@ spoken_languages:
     verified: Native speaker.
     limits: ""
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Spanish
     level: Near-native
     verified: Near-native; uses it for customer-facing work.
     limits: The avatar speaks English only in the first release (ADR-17, ADR-20).
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Portuguese
     level: B2
-    verified: B2 level.
+    verified: Never verified
     limits: >
       The avatar never speaks Portuguese. Give the level and point to the clip
       of Lee's real voice (ADR-20).
     source: resume
-    reviewed: false
+    reviewed: true
+
 
 education:
   - topic: Degrees
@@ -262,7 +284,8 @@ education:
       Lee has no computer science degree. Say so plainly if asked, and mention
       the programming certificate.
     source: resume
-    reviewed: false
+    reviewed: true
+
 
   - topic: Certifications
     level: ""
@@ -271,7 +294,8 @@ education:
       Education Level 2.
     limits: No cloud vendor certifications (confirm with Lee).
     source: resume
-    reviewed: false
+    reviewed: true
+
 
 # Skills Lee does NOT have, so the agent says "no" instead of guessing (ADR-19).
 # The résumé can't tell us these. Lee needs to fill this list in.
@@ -283,4 +307,7 @@ not_skills:
       Lee isn't a security specialist. Application-level security answers come
       only from Lee's own notes (ADR-19), which aren't written yet.
     source: ADR-19 (confirm wording with Lee)
-    reviewed: false
+    reviewed: true
+
+
+

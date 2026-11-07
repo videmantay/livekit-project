@@ -28,9 +28,11 @@ from livekit.agents import (
     llm,
     room_io,
 )
+from livekit.agents.voice.io import TimedString
 from livekit.plugins import ai_coustics, elevenlabs, google, silero, tavus
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
+from delivery import DELIVERY_NOTES, allow_listed_tags_only, without_tags
 from persona import GREETINGS, VOICE_NOTES
 
 load_dotenv()
@@ -40,6 +42,11 @@ AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "portfolio-twin")
 
 # No default voice: the twin must never fall back to a stock voice by accident.
 ELEVENLABS_VOICE_ID = os.environ["ELEVENLABS_VOICE_ID"]
+
+# ElevenLabs' realtime model for agents. It reads audio tags such as [laughs] and treats
+# ellipses and dashes as pauses (see delivery.py). The plugin streams it over the
+# text-to-dialogue websocket, which takes only `stability` from voice settings and no SSML.
+ELEVENLABS_MODEL = "eleven_v4_turbo"
 
 # How long the greeting waits for the avatar's video before the call fails.
 AVATAR_JOIN_TIMEOUT_SECONDS = 30.0
@@ -72,7 +79,7 @@ class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
             instructions=(
-                f"{VOICE_NOTES} "
+                f"{VOICE_NOTES} {DELIVERY_NOTES} "
                 "Say you are an AI if asked. Keep replies to one or two short sentences, "
                 "in plain spoken English, with no lists, emojis or symbols."
             ),
@@ -107,6 +114,13 @@ class Assistant(Agent):
             if not replied:
                 yield BLOCKED_REPLY
 
+    async def transcription_node(
+        self, text: AsyncIterable[str | TimedString], model_settings: ModelSettings
+    ) -> AsyncIterable[str | TimedString]:
+        # Visitors see the words only. Audio tags shape the voice and never reach the captions.
+        async for chunk in without_tags(text):
+            yield chunk
+
 
 server = AgentServer()
 
@@ -123,7 +137,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             safety_settings=GEMINI_SAFETY_SETTINGS,
         ),
         # English only (ADR-20).
-        tts=elevenlabs.TTS(voice_id=ELEVENLABS_VOICE_ID, language="en"),
+        tts=elevenlabs.TTS(
+            voice_id=ELEVENLABS_VOICE_ID, model=ELEVENLABS_MODEL, language="en"
+        ),
+        # The defaults, plus the allowlist that drops any tag not in delivery.ALLOWED_TAGS.
+        tts_text_transforms=["filter_markdown", "filter_emoji", allow_listed_tags_only],
         # Explicit, though it matches the SDK default, so a default change can't alter it quietly.
         vad=silero.VAD.load(),
         turn_detection=MultilingualModel(),
