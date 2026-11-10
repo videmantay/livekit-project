@@ -1,32 +1,35 @@
-# React + TypeScript + Vite
+# firebase
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The visitor and admin frontend: React 19, TypeScript, Vite, Tailwind v4 and shadcn/ui, served from Firebase Hosting. This folder also holds the Firestore rules and TTL config. See [CLAUDE.md](CLAUDE.md) for commands and rules.
 
-Currently, two official plugins are available:
+## Pages
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Path | What it is |
+|---|---|
+| `/` | Public portfolio: projects, experience and education, with a link to `/invite`. Content is in `src/landing/content.ts`. |
+| `/invite` | Visitor flow: access code, then terms, then optional contact details, then the call |
+| `/admin` | Lee's admin: conversations, access codes and facts, behind Google sign-in |
 
-## React Compiler
+## Preview mode
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The frontend isn't connected to `cloud-run` yet. Every request goes to an in-memory mock (`src/lib/api.ts` and `src/lib/admin-api.ts`) with sample data, and a banner says so. Admin sign-in is a button that lets you straight in.
 
-## Expanding the Oxlint configuration
+At the `/invite` gate, any code works except these, which act out the failure states:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+| Code | What happens |
+|---|---|
+| `bad` | 403: the generic "code doesn't work" message |
+| `slow` | 429: the "wait a minute" message |
+| `stale` | 409 on start: the terms reload and the box is unticked again |
+| `used` | Passes the gate, then 403 on start: back to the gate |
+| `drop` | The call starts, then the connection is lost after 5 seconds |
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+Refusing the microphone prompt shows the mic failure screen.
+
+## Setup
+
+```bash
+pnpm install
+cp .env.example .env.local
+pnpm dev
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.

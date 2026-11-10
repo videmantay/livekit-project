@@ -19,7 +19,7 @@ Someone with no code, or a bad one, including anyone probing the service.
 As an uninvited visitor, when I enter a code that doesn't work, I see one generic message, so nobody can learn whether a code ever existed.
 
 - ✅ Wrong, expired, revoked and used-up codes get an identical 403
-- ⬜ The gate screen shows that message and doesn't uppercase or reformat what was typed
+- ⚠️ The gate screen shows that message and doesn't uppercase or reformat what was typed (frontend built against a mock, not yet connected)
 
 ### U2. Guessing codes gets me nowhere
 
@@ -28,7 +28,7 @@ As the site owner, I want guessing to be impractical, so codes can't be found by
 - ✅ Codes are 144-bit random values, and only their hash is stored
 - ⚠️ The limiter blocks and recovers in a unit test, but the 429 isn't tested through the endpoints
 - ⚠️ The limit counts per Cloud Run instance, and the client IP logic is unverified on real Cloud Run
-- ⬜ The gate screen shows a separate "try again shortly" message on a 429
+- ⚠️ The gate screen shows a separate "try again shortly" message on a 429 (frontend built against a mock, not yet connected)
 
 ### U3. I can't reach any data or start a call
 
@@ -44,7 +44,7 @@ As the site owner, I want someone without a valid invite to be stopped at every 
 
 As an uninvited visitor, I can see how to reach Lee, so a missing code isn't a dead end.
 
-- ⬜ The gate shows a static LinkedIn link, and nothing about me is stored (ADR-16)
+- ⚠️ The gate shows a static LinkedIn link, and nothing about me is stored (ADR-16). The URL comes from `VITE_LINKEDIN_URL`, which isn't set yet.
 
 ### U5. What I can read without an invite
 
@@ -62,7 +62,7 @@ A recruiter or employer who was sent a code.
 As an invited visitor, I can enter my code and move on to the terms without spending a session.
 
 - ✅ Verifying a code leaves `sessions_used` unchanged
-- ⬜ Gate screen
+- ⚠️ Gate screen (frontend built against a mock, not yet connected)
 - ⬜ A valid code returns the terms (ADR-15)
 
 ### I2. I agree to clear terms before anything starts
@@ -72,7 +72,7 @@ As an invited visitor, I read the terms and tick an unticked box before my micro
 - ✅ The terms say it's an AI avatar, that nothing it says binds Lee, and cover storage, vendors, retention and deletion
 - ✅ No token without `terms_accepted: true`, and malformed consent uses no session
 - ✅ Terms version and acceptance time are saved with the session
-- ⬜ Terms screen, with the box unticked by default and the mic requested only afterwards
+- ⚠️ Terms screen, with the box unticked by default and the mic requested only afterwards (frontend built against a mock, not yet connected)
 - ⬜ Lawyer review of the terms text
 
 ### I3. If the terms change, I see the new ones
@@ -80,7 +80,7 @@ As an invited visitor, I read the terms and tick an unticked box before my micro
 As an invited visitor whose page is out of date, I'm asked to review the current terms, so my consent always matches what's in force.
 
 - ✅ An outdated version gets a 409 and uses no session
-- ⬜ The frontend reloads the terms on a 409
+- ⚠️ The frontend reloads the terms on a 409 (frontend built against a mock, not yet connected)
 
 ### I4. I can leave my contact details if I want to
 
@@ -88,7 +88,7 @@ As an invited visitor, I can optionally give my name, email and company in a for
 
 - ✅ Contact details are optional, validated, and stored apart from the session
 - ✅ No contact document is written when none is given
-- ⬜ Contact form
+- ⚠️ Contact form (frontend built against a mock, not yet connected)
 
 ### I5. I join a private, limited call
 
@@ -102,9 +102,9 @@ As an invited visitor, I join my own room, and my access covers nothing else.
 
 As an invited visitor, I'm reminded throughout that this isn't the real Lee, and that the conversation is being saved.
 
-- ⬜ A permanent label on the video reads "AI avatar of Lee, not the real person" and can't be dismissed
+- ⚠️ A permanent label on the video reads "AI avatar of Lee, not the real person" and can't be dismissed (frontend built against a mock, not yet connected)
 - ⬜ The avatar says so in its greeting and answers honestly whenever asked
-- ⬜ A visible "transcript being saved" indicator
+- ⚠️ A visible "transcript being saved" indicator (frontend built against a mock, not yet connected)
 - ⬜ Speaker labels read "Lee (AI)", never "Lee"
 
 ### I7. I can talk to the avatar and leave when I want
@@ -112,8 +112,8 @@ As an invited visitor, I'm reminded throughout that this isn't the real Lee, and
 As an invited visitor, I can speak with the avatar about Lee's experience and end the call at any time.
 
 - ⬜ Agent with Tavus, ElevenLabs and Gemini
-- ⬜ Mute and End Session controls
-- ⬜ The visitor sees the session length before starting, and a warning before it ends
+- ⚠️ Mute and End Session controls (frontend built against a mock, not yet connected)
+- ⚠️ The visitor sees the session length before starting, and a warning before it ends (frontend built against a mock, not yet connected)
 - ⬜ The agent ends the call at `MAX_SESSION_MINUTES` (15). The browser can't extend it.
 
 ### I8. The avatar can't overstep
@@ -135,8 +135,8 @@ As an invited visitor, I know my invite covers a set number of sessions, and a p
 
 - ✅ The session limit is enforced, and separate sessions get separate rooms
 - ⚠️ **Known bug:** simultaneous redemptions can exhaust Firestore's retries and return a 500. The concurrency test failed on 3 of 8 runs. No run showed the limit exceeded, but failed runs stop before that check.
-- ⬜ The start button blocks double clicks, which would otherwise spend two sessions
-- ⬜ A declined mic or lost connection after starting explains what happened and how to reach Lee. Either one uses a session (ADR-4).
+- ⚠️ The start button blocks double clicks, which would otherwise spend two sessions (frontend built against a mock, not yet connected)
+- ⚠️ A declined mic or lost connection after starting explains what happened and how to reach Lee. Either one uses a session (ADR-4). The screens exist, but nothing detects a real dropped connection yet.
 
 ### I10. My data doesn't stay forever
 
@@ -152,7 +152,7 @@ As an invited visitor, my data is deleted automatically, and I can ask for it to
 As an invited visitor, I can see Lee's real language level, so the avatar's speech doesn't mislead me.
 
 - ⬜ The avatar states Spanish as fluent and Portuguese as B2 (ADR-20)
-- ⬜ The call screen shows a clip labelled "Lee's real voice, unedited"
+- ⚠️ The call screen shows a clip labelled "Lee's real voice, unedited". The clip isn't recorded yet.
 - ⬜ Asked to speak Portuguese or translate, the avatar stays in English, gives the level and points to the clip
 - ⬜ Spoken to in another language, the avatar replies in English
 - ⬜ Portuguese speech is tested against the agent's speech recognition
@@ -171,7 +171,7 @@ As the admin, I can create an invite with a label, a session limit and an expiry
 
 - ✅ The code is random, stored only as a hash, and can't be shown again
 - ⚠️ The CLI exists, but the command itself has no test and hasn't run against real Firestore
-- ⬜ Access codes page in `/admin`, showing labels and never codes
+- ⚠️ Access codes page in `/admin`, showing labels and never codes (frontend built against a mock, not yet connected)
 
 ### A2. I can revoke an invite
 
@@ -179,7 +179,7 @@ As the admin, I can stop a code working immediately.
 
 - ✅ A revoked code is refused
 - ⚠️ Today this means editing the document in the Firebase console
-- ⬜ Revoke action in `/admin`
+- ⚠️ Revoke action in `/admin` (frontend built against a mock, not yet connected)
 
 ### A3. Only I can get into admin
 
@@ -211,8 +211,8 @@ As the admin, I read a short summary of each conversation and can compare it wit
 
 As the admin, I can see who I invited, what they asked, and any contact details they left.
 
-- ⬜ Conversations page with invite label, date, length, tl;dr and transcript
-- ⬜ Contact details shown beside the session
+- ⚠️ Conversations page with invite label, date, length, tl;dr and transcript (frontend built against a mock, not yet connected)
+- ⚠️ Contact details shown beside the session (frontend built against a mock, not yet connected)
 - ⬜ A notification email containing only a link, with no contact details or conversation content
 
 ### A7. I can honour a deletion request
@@ -228,8 +228,8 @@ As the admin, I decide what the avatar can repeat, assuming a visitor can extrac
 
 - ⬜ The agent gets only entries I've published, never drafts (ADR-21)
 - ⬜ Each entry gives a topic, level, what's verified and its limits, and skills I lack are listed too (ADR-19)
-- ⬜ Facts page in `/admin` where I edit drafts and publish them, with no deploy (ADR-21)
-- ⬜ Each publish is a numbered version, and I can roll back to an earlier one in one step
+- ⚠️ Facts page in `/admin` where I edit drafts and publish them, with no deploy (ADR-21) (frontend built against a mock, not yet connected)
+- ⚠️ Each publish is a numbered version, and I can roll back to an earlier one in one step (frontend built against a mock, not yet connected)
 - ⬜ A published change reaches the next call, and each transcript records the version used
 - ⬜ If `cloud-run` can't be reached, the agent uses the last version it fetched, and ends the call politely if it has none
 - ⬜ Grounding tests run against the published facts before each deploy and nightly, and a failure notifies me
@@ -238,8 +238,8 @@ As the admin, I decide what the avatar can repeat, assuming a visitor can extrac
 
 As the admin, I can add an answer for a question the avatar declined, so the next visitor gets it.
 
-- ⬜ Each declined question in a summary has an "Add as fact" action (ADR-19, ADR-21)
-- ⬜ It opens a draft with the question filled in, copying nothing about who asked
+- ⚠️ Each declined question in a summary has an "Add as fact" action (ADR-19, ADR-21) (frontend built against a mock, not yet connected)
+- ⚠️ It opens a draft with the question filled in, copying nothing about who asked (frontend built against a mock, not yet connected)
 
 ### A9. Secrets stay out of this public repo
 

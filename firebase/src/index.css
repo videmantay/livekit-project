@@ -48,38 +48,38 @@
   --radius-4xl: 28px;
 }
 
-/* Dark is the only theme. index.html sets class="dark" for shadcn's dark: styles. */
+/* Plain placeholder theme: white, black and neutral greys. Lee will pick the real look later. */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  --background: #0e1013;
-  --foreground: #f2efe8;
-  --card: #16191d;
-  --card-foreground: #f2efe8;
-  --popover: #1f2328;
-  --popover-foreground: #f2efe8;
-  --primary: #f2efe8;
-  --primary-foreground: #0e1013;
-  --secondary: #1f2328;
-  --secondary-foreground: #f2efe8;
-  --muted: #1f2328;
-  --muted-foreground: #b9b6ae;
-  --accent: #1f2328;
-  --accent-foreground: #f2efe8;
-  --destructive: #e5484d;
-  --border: #2a2d33;
-  --input: #3a3d44;
-  --ring: #f5a524;
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f2;
+  --secondary-foreground: #111111;
+  --muted: #f2f2f2;
+  --muted-foreground: #555555;
+  --accent: #f2f2f2;
+  --accent-foreground: #111111;
+  --destructive: #c62828;
+  --border: #dddddd;
+  --input: #cccccc;
+  --ring: #2563eb;
 
-  --brand: #f5a524;
-  --brand-foreground: #0e1013;
-  --brand-subtle: #2a2112;
-  --body: #dad7cf;
-  --faint: #8e8b84;
-  --divider: #22252a;
-  --success: #5bd18b;
-  --error: #ff8a80;
-  --visitor: #9ec5ff;
+  --brand: #111111;
+  --brand-foreground: #ffffff;
+  --brand-subtle: #f2f2f2;
+  --body: #222222;
+  --faint: #777777;
+  --divider: #e5e5e5;
+  --success: #2e7d32;
+  --error: #c62828;
+  --visitor: #2563eb;
 }
 
 @layer base {

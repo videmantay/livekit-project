@@ -16,7 +16,7 @@
 | 10 | Admin uses Google sign-in, verified by `cloud-run` | Accepted |
 | 11 | Disclose the AI in the UI and in speech | Accepted |
 | 12 | Security decisions outrank the design file | Accepted |
-| 13 | shadcn/ui and Tailwind v4, dark theme only | Accepted |
+| 13 | shadcn/ui and Tailwind v4, one theme | Accepted |
 | 14 | Public repo secret handling | Accepted |
 | 15 | Show the terms only after a valid code | Accepted |
 | 16 | No request-access form | Accepted |
@@ -152,7 +152,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 **Consequences:** A design feature is built only if it fits these decisions.
 
-## ADR-13: shadcn/ui and Tailwind v4, dark theme only
+## ADR-13: shadcn/ui and Tailwind v4, one theme
 
 **Status:** Accepted
 
@@ -160,7 +160,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 **Decision:** Use shadcn/ui on Radix, with Tailwind v4 tokens in `firebase/src/index.css`, and fonts installed as packages.
 
-**Consequences:** LiveKit's components still need mapping to these tokens.
+**Consequences:** There is one theme, with no light/dark switch. For now it is a plain white and grey placeholder; Lee has not chosen the final look. LiveKit's components still need mapping to these tokens.
 
 ## ADR-14: Public repo secret handling
 
