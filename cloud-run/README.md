@@ -6,10 +6,18 @@ Checks invite codes, records consent, and issues short-lived LiveKit tokens. Thi
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/terms` | Current terms text and version |
-| `POST` | `/invites/verify` | Checks a code without using a session |
+| `POST` | `/invites/verify` | Checks a code without using a session, and returns the current terms (ADR-15) |
 | `POST` | `/sessions` | Records consent, uses one session, returns a LiveKit token |
 | `GET` | `/health` | Health check |
+| `GET` | `/admin/facts` | Working facts and every published version (admin sign-in) |
+| `POST` | `/admin/facts` | Adds a draft fact (admin sign-in) |
+| `PUT` | `/admin/facts/{id}` | Edits a fact; it stays a draft until published (admin sign-in) |
+| `DELETE` | `/admin/facts/{id}` | Removes a fact from the working set (admin sign-in) |
+| `POST` | `/admin/facts/publish` | Publishes the working set as the next numbered version (admin sign-in) |
+| `POST` | `/admin/facts/rollback` | Publishes an earlier version as a new one and discards drafts (admin sign-in) |
+| `GET` | `/internal/facts` | The live published version, never drafts (signed by the agent) |
+
+Admin routes need `Authorization: Bearer <Google ID token>` for `ADMIN_EMAIL`. Internal routes need the agent's HMAC signature, made with `AGENT_SIGNING_SECRET` (see `app/agent_auth.py`).
 
 ## Run locally
 
@@ -23,6 +31,14 @@ The code is shown once and only its hash is stored. To revoke an invite, set `re
 
 ```bash
 uv run python -m app.create_invite --label "Acme recruiter" --expires-days 14
+```
+
+## Import the seed facts
+
+A one-time import of `livekit/facts/lee.yaml`. Only `reviewed: true` entries are imported, and the rest are listed. It refuses to run once any facts exist.
+
+```bash
+uv run python -m app.import_facts ../livekit/facts/lee.yaml --publish
 ```
 
 ## Test

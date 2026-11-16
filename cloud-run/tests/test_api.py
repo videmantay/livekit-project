@@ -21,8 +21,9 @@ def invite(db, invite_id):
     return db.collection("invites").document(invite_id).get().to_dict()
 
 
-def test_terms_show_settings_and_ai_disclosure(client):
-    body = client.get("/terms").json()
+def test_verify_returns_terms_with_settings_and_ai_disclosure(client, make_invite):
+    code, _ = make_invite()
+    body = client.post("/invites/verify", json={"code": code}).json()["terms"]
     assert body["version"] == get_terms().version
     assert "Test Legal Name" in body["text"]
     assert "privacy@example.com" in body["text"]
@@ -54,6 +55,11 @@ def test_every_bad_invite_gets_the_same_response(client, db, make_invite):
     ]
     assert {r.status_code for r in responses} == {403}
     assert len({r.text for r in responses}) == 1
+    assert "terms" not in responses[0].text
+
+
+def test_terms_are_not_public(client):
+    assert client.get("/terms").status_code in (404, 405)
 
 
 def test_code_is_never_stored(db, make_invite):
@@ -186,7 +192,9 @@ def test_cors_allows_only_configured_origins(client):
     assert "access-control-allow-origin" not in bad.headers
 
 
-@pytest.mark.parametrize("collection", ["invites", "sessions", "contacts"])
+@pytest.mark.parametrize(
+    "collection", ["invites", "sessions", "contacts", "facts", "fact_versions", "fact_meta"]
+)
 def test_firestore_rules_deny_browsers(collection):
     # A request with no Authorization header is judged by the rules, like a browser's.
     base = (

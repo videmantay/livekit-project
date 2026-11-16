@@ -1,6 +1,7 @@
 # Seed for Lee's facts (ADR-19, ADR-21). This file is a one-time import: cloud-run
 # loads it into Firestore as drafts, Lee edits and publishes them on the admin
-# page, and then this file is deleted. The agent never reads it directly.
+# page, and then this file is deleted. Until cloud-run's facts endpoint exists, the
+# agent reads this file locally (facts.py), and only `reviewed: true` entries.
 #
 # This repo is public and anything in the prompt can be extracted (ADR-7), so
 # everything here is public. Never add contact details, addresses, legal name,
@@ -15,6 +16,9 @@
 #   verified  what Lee has actually done, stated as facts
 #   limits    what Lee has NOT done, and what the agent must not claim or expand on
 #   source    where the fact came from (resume, Lee, etc.)
+#   stories   optional STAR stories, each with title, situation, task, action
+#             and result. The agent tells one when asked for an example, using
+#             only its words and numbers. Results need numbers Lee confirms.
 #   reviewed  true once Lee has approved the entry
 
 version: 1
@@ -309,5 +313,26 @@ not_skills:
     source: ADR-19 (confirm wording with Lee)
     reviewed: true
 
+hobbies:
+  - topic: Writing
+    level: completed a childrens book name "The Awesome Aussie Possum Possse"
+    verified: url is https://awesomeaussiepossumposse.com
+    limits: Not on amazon yet, but will be soon. The book is about a  group of seven possums who are stranded in the U.S. in the 1800s and are trying to find their way back to Australia. The book is a fun and educational story for children about the importance of friendship, teamwork, and perseverance.
+    source: Lee
+    reviewed: true
+
+  - topic: Travel
+    level: Lee has traveled to all over South America and Europe.
+    verified: Lee has travelled to  Spain twice, France, Italy and Greece. In South America he has been to Peru, Boliva and Brazil. He's also been to Canada, Costa Rica and Mexico.
+    limits: Lee has not traveled to every country in the world. He has not lived in every country in the world.
+    source: Lee
+    reviewed: true
+
+  - topic: Exercise
+    level: Lee enjoys hiking, swimming and going to the gym.
+    verified: Lee has hiked in the mountains of Colorado, swam in the ocean in California and has been to nearly all the California state parks. He also enjoys going to the gym and working out regularly.
+    limits: Lee does not participate in extreme sports or professional competitions.
+    source: Lee
+    reviewed: true
 
 

@@ -1593,6 +1593,7 @@ dependencies = [
     { name = "livekit-agents", extra = ["elevenlabs", "google", "silero", "tavus", "turn-detector"] },
     { name = "livekit-plugins-ai-coustics" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -1607,6 +1608,7 @@ requires-dist = [
     { name = "livekit-agents", extras = ["elevenlabs", "google", "silero", "tavus", "turn-detector"], specifier = ">=1.8.10" },
     { name = "livekit-plugins-ai-coustics", specifier = ">=0.3.5" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
 [package.metadata.requires-dev]

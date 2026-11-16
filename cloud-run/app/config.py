@@ -1,7 +1,7 @@
 from functools import lru_cache
 
 from dotenv import load_dotenv
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
 # Exports .env to the process too, so Google clients see GOOGLE_APPLICATION_CREDENTIALS.
@@ -19,6 +19,11 @@ class Settings(BaseSettings):
 
     terms_legal_name: str
     terms_contact_email: str
+
+    # The one Google account allowed into admin (ADR-10). From config, never code.
+    admin_email: str
+    # Shared with the agent. Signs its requests to /internal/* (ADR-9).
+    agent_signing_secret: SecretStr = Field(min_length=32)
 
     retention_days: int = 90
     token_ttl_seconds: int = 300

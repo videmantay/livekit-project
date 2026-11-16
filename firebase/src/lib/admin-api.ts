@@ -1,5 +1,8 @@
-// Admin API. Real calls will go to cloud-run with a Google ID token (ADR-10).
-// Only an in-memory mock with sample data exists for now.
+// Admin API. Real calls go to cloud-run with a Google ID token (ADR-10).
+// Facts are connected to cloud-run when admin sign-in is configured. Conversations and access
+// codes still use the in-memory mock, until cloud-run has those endpoints.
+
+import { adminAuthConfigured, adminIdToken } from './admin-auth'
 
 export type TranscriptTurn = { speaker: 'visitor' | 'agent'; text: string }
 
@@ -24,12 +27,29 @@ export type Invite = {
   revoked: boolean
 }
 
+// Prompt order in the agent. Matches cloud-run's facts.SECTIONS.
+export const FACT_SECTIONS = {
+  profile: 'Profile',
+  experience: 'Experience',
+  skills: 'Skills',
+  spoken_languages: 'Spoken languages',
+  education: 'Education',
+  not_skills: "Skills Lee doesn't have",
+} as const
+
+export type FactSection = keyof typeof FACT_SECTIONS
+
+/** A STAR story the avatar tells, in this order, when asked for an example. */
+export type Story = { title: string; situation: string; task: string; action: string; result: string }
+
 export type Fact = {
   id: string
+  section: FactSection
   topic: string
   level: string
   verified: string
   limits: string
+  stories: Story[]
 }
 
 export type FactsVersion = { number: number; publishedAt: string; facts: Fact[] }
@@ -102,17 +122,29 @@ let invites: Invite[] = [
 const seedFacts: Fact[] = [
   {
     id: 'f1',
+    section: 'profile',
     topic: 'Current role and focus',
     level: 'Senior',
     verified: 'Senior software engineer doing full-stack work and AI integration.',
     limits: "Don't discuss availability, start dates, pay or offers. Send those to Lee.",
+    stories: [],
   },
   {
     id: 'f2',
+    section: 'profile',
     topic: 'Travel',
     level: 'Yes',
     verified: 'Open to travel and on-site customer deployment.',
     limits: 'No specific dates or locations.',
+    stories: [
+      {
+        title: 'Sample story',
+        situation: 'Sample situation.',
+        task: 'Sample task.',
+        action: 'Sample action.',
+        result: 'Sample result, with a number Lee confirmed.',
+      },
+    ],
   },
 ]
 
@@ -206,4 +238,42 @@ export const mockAdminApi: AdminApi = {
   },
 }
 
-export const adminApi: AdminApi = mockAdminApi
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+export class AdminApiError extends Error {
+  readonly status: number
+  constructor(status: number) {
+    super(status === 401 ? 'Not signed in as admin' : `Request failed with ${status}`)
+    this.status = status
+  }
+}
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${await adminIdToken()}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!response.ok) throw new AdminApiError(response.status)
+  return response.json() as Promise<T>
+}
+
+const factBody = ({ id: _id, ...fact }: Fact) => fact
+
+/** Facts on cloud-run (ADR-21). Every call sends the ID token, which cloud-run checks. */
+export const cloudRunFactsApi: Pick<AdminApi, 'getFacts' | 'saveFact' | 'deleteFact' | 'publishFacts' | 'rollbackFacts'> =
+  {
+    getFacts: () => call('GET', '/admin/facts'),
+    saveFact: (fact) =>
+      fact.id
+        ? call('PUT', `/admin/facts/${encodeURIComponent(fact.id)}`, factBody(fact))
+        : call('POST', '/admin/facts', factBody(fact)),
+    deleteFact: (id) => call('DELETE', `/admin/facts/${encodeURIComponent(id)}`),
+    publishFacts: () => call('POST', '/admin/facts/publish'),
+    rollbackFacts: (version) => call('POST', '/admin/facts/rollback', { version }),
+  }
+
+export const adminApi: AdminApi = adminAuthConfigured ? { ...mockAdminApi, ...cloudRunFactsApi } : mockAdminApi

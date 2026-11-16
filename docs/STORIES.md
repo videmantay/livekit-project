@@ -8,7 +8,7 @@ Status of each acceptance check:
 - ⚠️ Built, but unreliable or only partly checked
 - ⬜ Not built yet
 
-Last checked 2026-11-01. 23 of 24 tests pass every time, and the other fails intermittently (see I9). Nothing has run against a real LiveKit project or a deployed service yet.
+Last checked 2026-11-01, and cloud-run's suite again on 2026-11-15 (58 pass). 23 of 24 tests pass every time, and the other fails intermittently (see I9). Nothing has run against a real LiveKit project or a deployed service yet.
 
 ## Uninvited visitor
 
@@ -19,7 +19,7 @@ Someone with no code, or a bad one, including anyone probing the service.
 As an uninvited visitor, when I enter a code that doesn't work, I see one generic message, so nobody can learn whether a code ever existed.
 
 - ✅ Wrong, expired, revoked and used-up codes get an identical 403
-- ⚠️ The gate screen shows that message and doesn't uppercase or reformat what was typed (frontend built against a mock, not yet connected)
+- ⚠️ The gate screen shows that message and doesn't uppercase or reformat what was typed (connected to cloud-run, not yet tried in a browser end to end)
 
 ### U2. Guessing codes gets me nowhere
 
@@ -28,7 +28,7 @@ As the site owner, I want guessing to be impractical, so codes can't be found by
 - ✅ Codes are 144-bit random values, and only their hash is stored
 - ⚠️ The limiter blocks and recovers in a unit test, but the 429 isn't tested through the endpoints
 - ⚠️ The limit counts per Cloud Run instance, and the client IP logic is unverified on real Cloud Run
-- ⚠️ The gate screen shows a separate "try again shortly" message on a 429 (frontend built against a mock, not yet connected)
+- ⚠️ The gate screen shows a separate "try again shortly" message on a 429 (connected to cloud-run, not yet tried in a browser end to end)
 
 ### U3. I can't reach any data or start a call
 
@@ -50,8 +50,15 @@ As an uninvited visitor, I can see how to reach Lee, so a missing code isn't a d
 
 As an uninvited visitor, I can see only what Lee considers public.
 
-- ⚠️ `GET /terms` needs no invite today, so it exposes the legal name and contact email
-- ⬜ The terms are returned only after a valid code, and `GET /terms` is removed (ADR-15)
+- ✅ The terms are returned only after a valid code, and `GET /terms` is removed (ADR-15)
+
+### U6. I can read the portfolio in Spanish or Portuguese
+
+As a Spanish or Portuguese speaker, I can read Lee's portfolio in my language, so I don't need English to learn about Lee's work.
+
+- ⚠️ The portfolio page is at `/es` and `/pt`, with a language switcher in the header (ADR-22). Built and type-checked, not yet tried in a browser
+- ⚠️ Those pages say the call with the avatar is in English
+- ⬜ Lee has reviewed the Spanish and Portuguese text, and a fluent speaker has reviewed the Portuguese
 
 ## Invited visitor
 
@@ -62,8 +69,8 @@ A recruiter or employer who was sent a code.
 As an invited visitor, I can enter my code and move on to the terms without spending a session.
 
 - ✅ Verifying a code leaves `sessions_used` unchanged
-- ⚠️ Gate screen (frontend built against a mock, not yet connected)
-- ⬜ A valid code returns the terms (ADR-15)
+- ⚠️ Gate screen (connected to cloud-run, not yet tried in a browser end to end)
+- ✅ A valid code returns the terms (ADR-15)
 
 ### I2. I agree to clear terms before anything starts
 
@@ -72,7 +79,7 @@ As an invited visitor, I read the terms and tick an unticked box before my micro
 - ✅ The terms say it's an AI avatar, that nothing it says binds Lee, and cover storage, vendors, retention and deletion
 - ✅ No token without `terms_accepted: true`, and malformed consent uses no session
 - ✅ Terms version and acceptance time are saved with the session
-- ⚠️ Terms screen, with the box unticked by default and the mic requested only afterwards (frontend built against a mock, not yet connected)
+- ⚠️ Terms screen, with the box unticked by default and the mic requested only afterwards (connected to cloud-run, not yet tried in a browser end to end)
 - ⬜ Lawyer review of the terms text
 
 ### I3. If the terms change, I see the new ones
@@ -80,7 +87,7 @@ As an invited visitor, I read the terms and tick an unticked box before my micro
 As an invited visitor whose page is out of date, I'm asked to review the current terms, so my consent always matches what's in force.
 
 - ✅ An outdated version gets a 409 and uses no session
-- ⚠️ The frontend reloads the terms on a 409 (frontend built against a mock, not yet connected)
+- ⚠️ The frontend reloads the terms on a 409 (connected to cloud-run, not yet tried in a browser end to end)
 
 ### I4. I can leave my contact details if I want to
 
@@ -88,7 +95,7 @@ As an invited visitor, I can optionally give my name, email and company in a for
 
 - ✅ Contact details are optional, validated, and stored apart from the session
 - ✅ No contact document is written when none is given
-- ⚠️ Contact form (frontend built against a mock, not yet connected)
+- ⚠️ Contact form (connected to cloud-run, not yet tried in a browser end to end)
 
 ### I5. I join a private, limited call
 
@@ -96,31 +103,31 @@ As an invited visitor, I join my own room, and my access covers nothing else.
 
 - ✅ Each session gets its own room
 - ✅ The token covers one room, the microphone only, no data publishing, no admin rights, and expires in 5 minutes
-- ⬜ Call screen, connected to a real LiveKit project
+- ⚠️ Call screen joins the room with the session token, shows the avatar video and a live transcript (built against LiveKit, not yet tried with a real project)
 
 ### I6. I always know I'm talking to an AI
 
 As an invited visitor, I'm reminded throughout that this isn't the real Lee, and that the conversation is being saved.
 
-- ⚠️ A permanent label on the video reads "AI avatar of Lee, not the real person" and can't be dismissed (frontend built against a mock, not yet connected)
+- ⚠️ A permanent label on the video reads "AI avatar of Lee, not the real person" and can't be dismissed (connected to cloud-run, not yet tried in a browser end to end)
 - ⬜ The avatar says so in its greeting and answers honestly whenever asked
-- ⚠️ A visible "transcript being saved" indicator (frontend built against a mock, not yet connected)
-- ⬜ Speaker labels read "Lee (AI)", never "Lee"
+- ⚠️ A visible "transcript being saved" indicator (connected to cloud-run, not yet tried in a browser end to end)
+- ⚠️ Speaker labels read "Lee (AI)", never "Lee" (built against LiveKit, not yet tried with a real project)
 
 ### I7. I can talk to the avatar and leave when I want
 
 As an invited visitor, I can speak with the avatar about Lee's experience and end the call at any time.
 
 - ⬜ Agent with Tavus, ElevenLabs and Gemini
-- ⚠️ Mute and End Session controls (frontend built against a mock, not yet connected)
-- ⚠️ The visitor sees the session length before starting, and a warning before it ends (frontend built against a mock, not yet connected)
+- ⚠️ Mute and End Session controls (connected to cloud-run, not yet tried in a browser end to end)
+- ⚠️ The visitor sees the session length before starting, and a warning before it ends (connected to cloud-run, not yet tried in a browser end to end)
 - ⬜ The agent ends the call at `MAX_SESSION_MINUTES` (15). The browser can't extend it.
 
 ### I8. The avatar can't overstep
 
 As an invited visitor and as Lee, we need the avatar to stay within public information and never commit Lee to anything.
 
-- ⬜ The agent knows only the material Lee has marked public and verified
+- ✅ The agent knows only the material Lee has marked public and verified
 - ⬜ It sends offers, pay, start dates and availability to Lee directly
 - ⬜ It has no database access, no tools that read data, and can't see other sessions
 - ⬜ Prompt-extraction and commitment attempts are tested
@@ -135,8 +142,8 @@ As an invited visitor, I know my invite covers a set number of sessions, and a p
 
 - ✅ The session limit is enforced, and separate sessions get separate rooms
 - ⚠️ **Known bug:** simultaneous redemptions can exhaust Firestore's retries and return a 500. The concurrency test failed on 3 of 8 runs. No run showed the limit exceeded, but failed runs stop before that check.
-- ⚠️ The start button blocks double clicks, which would otherwise spend two sessions (frontend built against a mock, not yet connected)
-- ⚠️ A declined mic or lost connection after starting explains what happened and how to reach Lee. Either one uses a session (ADR-4). The screens exist, but nothing detects a real dropped connection yet.
+- ⚠️ The start button blocks double clicks, which would otherwise spend two sessions (connected to cloud-run, not yet tried in a browser end to end)
+- ⚠️ A declined mic or lost connection after starting explains what happened and how to reach Lee. Either one uses a session (ADR-4). A dropped room or the agent leaving shows the "connection lost" screen (built against LiveKit, not yet tried with a real project).
 
 ### I10. My data doesn't stay forever
 
@@ -185,9 +192,9 @@ As the admin, I can stop a code working immediately.
 
 As the admin, I sign in with Google, and nobody else gets in.
 
-- ⬜ `/admin` behind Google sign-in, limited to one account
-- ⬜ `cloud-run` verifies the sign-in on every request, and the browser still never touches Firestore
-- ⬜ Tests cover no token, an invalid token and the wrong account
+- ✅ `/admin` behind Google sign-in, limited to one account
+- ✅ `cloud-run` verifies the sign-in on every request, and the browser still never touches Firestore
+- ✅ Tests cover no token, an invalid token and the wrong account
 
 ### A4. Every conversation is saved reliably
 
@@ -226,12 +233,12 @@ As the admin, I can delete one person's data when they ask.
 
 As the admin, I decide what the avatar can repeat, assuming a visitor can extract all of it.
 
-- ⬜ The agent gets only entries I've published, never drafts (ADR-21)
-- ⬜ Each entry gives a topic, level, what's verified and its limits, and skills I lack are listed too (ADR-19)
-- ⚠️ Facts page in `/admin` where I edit drafts and publish them, with no deploy (ADR-21) (frontend built against a mock, not yet connected)
-- ⚠️ Each publish is a numbered version, and I can roll back to an earlier one in one step (frontend built against a mock, not yet connected)
+- ✅ The agent gets only entries I've published, never drafts (ADR-21)
+- ✅ Each entry gives a topic, level, what's verified and its limits, and skills I lack are listed too (ADR-19)
+- ⚠️ Facts page in `/admin` where I edit drafts and publish them, with no deploy (ADR-21) (connected to `cloud-run`, not yet tried with a real Google sign-in)
+- ⚠️ Each publish is a numbered version, and I can roll back to an earlier one in one step (connected to `cloud-run`, not yet tried with a real Google sign-in)
 - ⬜ A published change reaches the next call, and each transcript records the version used
-- ⬜ If `cloud-run` can't be reached, the agent uses the last version it fetched, and ends the call politely if it has none
+- ✅ If `cloud-run` can't be reached, the agent uses the last version it fetched, and ends the call politely if it has none
 - ⬜ Grounding tests run against the published facts before each deploy and nightly, and a failure notifies me
 
 ### A10. I can turn declined questions into facts

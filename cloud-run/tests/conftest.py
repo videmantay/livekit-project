@@ -12,6 +12,8 @@ os.environ.update(
     TERMS_LEGAL_NAME="Test Legal Name",
     TERMS_CONTACT_EMAIL="privacy@example.com",
     RATE_LIMIT_PER_MINUTE="1000",
+    ADMIN_EMAIL="admin@example.com",
+    AGENT_SIGNING_SECRET="test-agent-signing-secret-at-least-32-chars",
 )
 
 from fastapi.testclient import TestClient

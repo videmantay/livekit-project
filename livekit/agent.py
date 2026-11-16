@@ -2,7 +2,8 @@
 
 Pipeline: LiveKit Inference STT -> Gemini 3.5 Flash (Google plugin, own key)
 -> ElevenLabs TTS (plugin, own key) -> Tavus avatar, which lip-syncs to that
-audio. It is not the twin yet: no fact file. That comes later.
+audio. Lee's published facts go into the prompt (facts.py), fetched from cloud-run at each call
+start, or read from the local seed file when CLOUD_RUN_URL is unset (ADR-21).
 
 Needs GOOGLE_API_KEY, ELEVEN_API_KEY and ELEVENLABS_VOICE_ID in .env, plus
 TAVUS_API_KEY and TAVUS_FACE_ID for the avatar.
@@ -12,10 +13,12 @@ Run it:
     uv run agent.py dev       # connect to LiveKit Cloud, then see the avatar in the Agent Console
 """
 
+import logging
 import os
 import random
 from collections.abc import AsyncIterable
 
+import aiohttp
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import (
@@ -33,9 +36,19 @@ from livekit.plugins import ai_coustics, elevenlabs, google, silero, tavus
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from delivery import DELIVERY_NOTES, allow_listed_tags_only, without_tags
+from facts import (
+    GROUNDING_RULES,
+    STORY_RULES,
+    FactSet,
+    NoFactsError,
+    facts_prompt,
+    get_published_facts,
+)
 from persona import GREETINGS, VOICE_NOTES
 
 load_dotenv()
+
+logger = logging.getLogger("agent")
 
 # Explicit dispatch (U3): with a name set, the agent only joins rooms it is dispatched to.
 AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "portfolio-twin")
@@ -47,6 +60,9 @@ ELEVENLABS_VOICE_ID = os.environ["ELEVENLABS_VOICE_ID"]
 # ellipses and dashes as pauses (see delivery.py). The plugin streams it over the
 # text-to-dialogue websocket, which takes only `stability` from voice settings and no SSML.
 ELEVENLABS_MODEL = "eleven_v4_turbo"
+
+# Same base URL the Tavus plugin uses, for ending the conversation it started.
+TAVUS_API_URL = "https://tavusapi.com/v2"
 
 # How long the greeting waits for the avatar's video before the call fails.
 AVATAR_JOIN_TIMEOUT_SECONDS = 30.0
@@ -67,6 +83,12 @@ GEMINI_SAFETY_SETTINGS = [
 # Spoken in place of a reply Gemini blocked, once per blocked turn.
 BLOCKED_REPLY = "That's not something I can talk about, but I'm happy to tell you about Lee's work."
 
+# Spoken when there are no facts to answer from, then the call ends (ADR-21, A8).
+NO_FACTS_REPLY = (
+    "Hi, I'm Lee's AI twin. Sorry, I can't answer questions right now because something's "
+    "wrong on my end. Please try again later, or reach out to Lee directly."
+)
+
 
 def _is_safety_block(error: APIStatusError) -> bool:
     # The Google plugin raises these two messages for a blocked reply and a blocked prompt.
@@ -75,13 +97,35 @@ def _is_safety_block(error: APIStatusError) -> bool:
     )
 
 
+async def _end_tavus_conversation(avatar: tavus.AvatarSession | None) -> None:
+    conversation_id = avatar.conversation_id if avatar else None
+    if not conversation_id:
+        return
+    try:
+        async with aiohttp.ClientSession() as http, http.post(
+            f"{TAVUS_API_URL}/conversations/{conversation_id}/end",
+            headers={"x-api-key": os.environ["TAVUS_API_KEY"]},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
+            if not response.ok:
+                # Status only: the body could echo request details (ADR-14).
+                logger.warning("tavus end failed", extra={"status": response.status})
+    except (aiohttp.ClientError, TimeoutError) as error:
+        logger.warning("tavus end failed", extra={"error": type(error).__name__})
+
+
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, facts: FactSet | None) -> None:
         super().__init__(
             instructions=(
                 f"{VOICE_NOTES} {DELIVERY_NOTES} "
-                "Say you are an AI if asked. Keep replies to one or two short sentences, "
-                "in plain spoken English, with no lists, emojis or symbols."
+                "Say you are an AI if asked. Keep replies to one or two short sentences, except "
+                "a story, which takes about four. Use plain spoken English, with no lists, "
+                "emojis or symbols.\n\n"
+                f"{GROUNDING_RULES}\n\n{STORY_RULES}\n\n{facts_prompt(facts)}"
+                if facts
+                # Never used to answer: with no facts the call ends after NO_FACTS_REPLY.
+                else f"{VOICE_NOTES} You have no facts about Lee. Answer nothing about Lee."
             ),
         )
         # User messages Gemini blocked. They stay in the transcript but are never sent again,
@@ -127,6 +171,16 @@ server = AgentServer()
 
 @server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: agents.JobContext) -> None:
+    # Fetched per call, so a publish in admin reaches the next call with no deploy (ADR-21).
+    facts: FactSet | None
+    try:
+        facts = await get_published_facts()
+        # The version only, never fact text (ADR-14). It goes into the transcript once built.
+        logger.info("facts loaded", extra={"facts_version": facts.version})
+    except NoFactsError as error:
+        facts = None
+        logger.error("no facts for this call", extra={"reason": str(error)})
+
     session = AgentSession(
         stt=inference.STT(model="assemblyai/universal-3-6-pro", language="en"),
         # Minimal thinking keeps voice replies fast. Gemini 3 takes a level only; there is no
@@ -134,6 +188,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         llm=google.LLM(
             model="gemini-3.5-flash",
             thinking_config={"thinking_level": "minimal"},
+            # Least variation in wording. It doesn't stop invention; the facts and rules do that.
+            temperature=0,
             safety_settings=GEMINI_SAFETY_SETTINGS,
         ),
         # English only (ADR-20).
@@ -153,14 +209,18 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         # No default face, for the same reason as the voice: without a face ID the plugin
         # shows a stock Tavus face. Read here, not at import, so console runs without it.
         # The stock PAL is used: echo mode, so Tavus only moves the face to our audio and
-        # never hears the visitor or writes replies. The plugin removes the avatar on shutdown.
+        # never hears the visitor or writes replies.
         avatar = tavus.AvatarSession(face_id=os.environ["TAVUS_FACE_ID"])
+        # The plugin never ends the Tavus conversation, so every call would hold a slot until
+        # Tavus times it out, and the account soon hits its concurrent-conversation cap.
+        # Registered before start, so a start that fails partway still cleans up.
+        ctx.add_shutdown_callback(lambda: _end_tavus_conversation(avatar))
         # Before session.start, so agent audio goes to the avatar and not straight to the room.
         await avatar.start(session, room=ctx.room)
 
     await session.start(
         room=ctx.room,
-        agent=Assistant(),
+        agent=Assistant(facts),
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
                 # Voice isolation for one visitor on a laptop mic. It runs before VAD, STT and
@@ -177,6 +237,10 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         await avatar.wait_for_join(timeout=AVATAR_JOIN_TIMEOUT_SECONDS)
     # Lee's own words, spoken as written, and not interruptible so the AI disclosure is always
     # heard in full (ADR-8, I6).
+    if facts is None:
+        await session.say(NO_FACTS_REPLY, allow_interruptions=False)
+        ctx.shutdown(reason="no facts")
+        return
     await session.say(random.choice(GREETINGS), allow_interruptions=False)
 
 

@@ -38,6 +38,10 @@
   --color-success: var(--success);
   --color-error: var(--error);
   --color-visitor: var(--visitor);
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-hero-muted: var(--hero-muted);
+  --color-hero-accent: var(--hero-accent);
 
   --radius-sm: 8px;
   --radius-md: 10px;
@@ -80,6 +84,12 @@
   --success: #2e7d32;
   --error: #c62828;
   --visitor: #2563eb;
+
+  /* Dark landing hero, modelled on the reference design. */
+  --hero: #0d0f12;
+  --hero-foreground: #ffffff;
+  --hero-muted: #a3a8b0;
+  --hero-accent: #1d63ed;
 }
 
 @layer base {

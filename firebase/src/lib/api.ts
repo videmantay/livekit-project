@@ -1,5 +1,8 @@
 // Visitor API. The shapes follow cloud-run's endpoints, with the terms coming
-// back from verify as ADR-15 requires. Only the mock exists for now.
+// back from verify as ADR-15 requires.
+//
+// With VITE_API_URL set, requests go to cloud-run. Without it, the in-memory mock below
+// stands in, for local preview.
 
 export type Terms = { version: string; text: string }
 
@@ -77,4 +80,30 @@ export const mockVisitorApi: VisitorApi = {
   },
 }
 
-export const visitorApi: VisitorApi = mockVisitorApi
+const API_URL = import.meta.env.VITE_API_URL as string | undefined
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new ApiError(response.status)
+  return response.json() as Promise<T>
+}
+
+export const cloudRunVisitorApi: VisitorApi = {
+  async verifyInvite(code) {
+    const { terms } = await post<{ terms: Terms }>('/invites/verify', { code })
+    return terms
+  },
+  startSession({ code, termsVersion, contact }) {
+    // The visitor ticked the box to get here; cloud-run refuses a session without it (I2).
+    return post('/sessions', { code, terms_version: termsVersion, terms_accepted: true, contact })
+  },
+}
+
+/** True when no cloud-run is configured, so every visitor request goes to the mock. */
+export const visitorPreview = !API_URL
+
+export const visitorApi: VisitorApi = visitorPreview ? mockVisitorApi : cloudRunVisitorApi

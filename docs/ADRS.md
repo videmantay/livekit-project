@@ -25,6 +25,7 @@
 | 19 | The agent answers only from verified facts | Accepted |
 | 20 | Show language levels with real proof, not AI speech | Accepted |
 | 21 | Facts are edited in admin and fetched at call start | Accepted |
+| 22 | The portfolio page is in English, Spanish and Portuguese | Accepted |
 
 ## ADR-1: One folder per deploy target
 
@@ -122,7 +123,7 @@ Visitor camera is out, because the agent doesn't need it and it adds privacy exp
 
 ## ADR-10: Admin uses Google sign-in, verified by `cloud-run`
 
-**Status:** Accepted, not built
+**Status:** Accepted, partly built: sign-in is checked for the facts endpoints
 
 **Context:** Admin shows contact details and transcripts.
 
@@ -174,7 +175,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 ## ADR-15: Show the terms only after a valid code
 
-**Status:** Accepted, not built
+**Status:** Accepted
 
 **Context:** `GET /terms` is public, so anyone who finds the URL can read Lee's legal name and contact email. Only invited visitors need the terms.
 
@@ -216,7 +217,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 ## ADR-19: The agent answers only from verified facts
 
-**Status:** Accepted, not built
+**Status:** Accepted, partly built: facts and rules are in the prompt; grounding tests and declined-question summaries aren't built
 
 **Context:** Given only a résumé, the model confidently answered cybersecurity questions Lee couldn't answer. A résumé says what Lee has done, not what Lee hasn't, so the model fills the gaps from its own knowledge. Anything it says in Lee's voice sounds like Lee's expertise, and that oversells Lee to recruiters.
 
@@ -252,7 +253,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 ## ADR-21: Facts are edited in admin and fetched at call start
 
-**Status:** Accepted, not built
+**Status:** Accepted, partly built: transcripts don't record the fact version yet, and the nightly run isn't built
 
 **Context:** Lee will update the facts from time to time, often after seeing a question the avatar declined. Editing a file in the repo and redeploying the agent for each change is slow, and the repo is public, so the facts' whole history would sit in git.
 
@@ -270,3 +271,15 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 **Alternative rejected:** Running the grounding tests on every publish, and going live only if they pass. It's safer, but each edit would wait minutes and cost a test run, and it needs `cloud-run` to trigger CI. Lee is the only author and reviewer, so a nightly check and one-step rollback are enough for now.
 
 **Consequences:** A bad edit can be live until the nightly run catches it or Lee notices. The agent can't start a call while `cloud-run` is down and it has no cached version, but `cloud-run` issues the tokens anyway, so no call could start then. Facts are Lee's own content, not visitor data, so they have no `delete_at`. Anything published is still treated as public (ADR-7).
+
+## ADR-22: The portfolio page is in English, Spanish and Portuguese
+
+**Status:** Accepted
+
+**Context:** Lee's work and YouTube channels reach Spanish and Portuguese speakers. ADR-17 keeps the first release English only because each language needs its own reviewed consent text. The public portfolio page has no consent text and collects nothing.
+
+**Decision:** The portfolio page is served at `/` (English), `/es` and `/pt`, with a language switcher in the header. Each language has its own URL so it can be shared, and nothing about the visitor's choice is stored. The invite flow, terms and call stay English only (ADR-17). The Spanish and Portuguese pages say that the call is in English, and they claim nothing the English page doesn't. All three languages sit side by side in `firebase/src/landing/content.ts`, so an edit to one is visible in the others. Spanish and Portuguese use gender-neutral wording, and job and certificate titles stay as issued.
+
+**Alternative rejected:** Choosing the language from the browser settings and redirecting. It hides the English page from people who want it and makes links depend on who opens them.
+
+**Consequences:** Every change to the portfolio text needs all three languages. The translations need Lee's review, and the Portuguese needs a fluent reviewer too, because Lee's Portuguese is about B2 (ADR-20). If the avatar starts speaking Spanish (ADR-20, stage 3), the Spanish page's note about the call changes with it.
