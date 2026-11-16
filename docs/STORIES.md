@@ -8,7 +8,7 @@ Status of each acceptance check:
 - ⚠️ Built, but unreliable or only partly checked
 - ⬜ Not built yet
 
-Last checked 2026-11-01, and cloud-run's suite again on 2026-11-16 (66 pass, and the concurrency tests passed 20 runs in a row). Nothing has run against a real LiveKit project or a deployed service yet.
+Last checked 2026-11-01, and cloud-run's suite again on 2026-11-16 (134 pass; the concurrency tests passed 20 runs in a row at 66). Nothing has run against a real LiveKit project or a deployed service yet.
 
 ## Uninvited visitor
 
@@ -151,8 +151,8 @@ As an invited visitor, my data is deleted automatically, and I can ask for it to
 
 - ✅ Sessions and contacts get a `delete_at` 90 days out, and invites 90 days after they expire, so a label naming a person doesn't stay forever
 - ⚠️ TTL is configured but not deployed, and the emulator doesn't run it, so nothing is being deleted yet
-- ⬜ Transcripts and summaries get the same `delete_at`
-- ⬜ The deletion request process exists (A7)
+- ✅ Transcripts get the session's `delete_at`, and summaries are stored on the session, so both go with it
+- ⚠️ The deletion request process exists (A7): `cloud-run` deletes one person's data together, and the admin page isn't connected yet
 
 ### I11. I get an honest picture of Lee's languages
 
@@ -179,6 +179,7 @@ As the admin, I can create an invite with a label, a session limit and an expiry
 - ✅ The code is random, stored only as a hash, and can't be shown again
 - ✅ The CLI applies its label, session limit, expiry and defaults, and the code it prints works at `POST /sessions`
 - ⚠️ The CLI hasn't run against real Firestore
+- ✅ `POST /admin/invites` creates one and returns the code once, with `Cache-Control: no-store`. `GET /admin/invites` lists labels and counts, never codes
 - ⚠️ Access codes page in `/admin`, showing labels and never codes (frontend built against a mock, not yet connected)
 
 ### A2. I can revoke an invite
@@ -186,7 +187,7 @@ As the admin, I can create an invite with a label, a session limit and an expiry
 As the admin, I can stop a code working immediately.
 
 - ✅ A revoked code is refused
-- ⚠️ Today this means editing the document in the Firebase console
+- ✅ `POST /admin/invites/{id}/revoke` stops the code at once, for both verify and sessions
 - ⚠️ Revoke action in `/admin` (frontend built against a mock, not yet connected)
 
 ### A3. Only I can get into admin
@@ -201,19 +202,20 @@ As the admin, I sign in with Google, and nobody else gets in.
 
 As the admin, I get the transcript even if something fails mid-call.
 
-- ⬜ The agent sends transcript turns to a signed internal `cloud-run` endpoint in batches
-- ⬜ Text only, with no audio or video
-- ⬜ A LiveKit `room_finished` webhook closes the session if the agent dies
-- ⬜ Forged or replayed calls to both endpoints are refused
+- ✅ `cloud-run`'s signed internal endpoint stores numbered transcript batches, with any violations marked
+- ⬜ The agent sends transcript turns to it in batches
+- ✅ Text only, with no audio or video: turns are a speaker and text, and other fields are refused
+- ✅ A LiveKit `room_finished` webhook ends the session if the agent didn't (tested with a signed fake event, not yet with LiveKit Cloud)
+- ✅ Forged, tampered, expired or replayed calls to both endpoints are refused, and a replay writes nothing
 
 ### A5. I get a tl;dr I can check
 
 As the admin, I read a short summary of each conversation and can compare it with the transcript, because a visitor could try to steer it.
 
-- ⬜ `cloud-run` writes the summary when the call ends
-- ⬜ The summary step has no tools and treats the transcript as untrusted input
-- ⬜ The summary links to its transcript
-- ⬜ The summary lists the questions the avatar declined (ADR-19)
+- ⚠️ `cloud-run` writes the summary when the call ends, once, from whichever of the final batch and the webhook comes first (tested with a fake model, not yet with Gemini)
+- ✅ The summary step has no tools and treats the transcript as untrusted input, and its output is cut to length
+- ✅ The summary is stored on the session, next to its transcript
+- ⚠️ The summary lists the questions the avatar declined (ADR-19) (not yet tried with Gemini)
 
 ### A6. I can review conversations and contacts
 
@@ -221,13 +223,14 @@ As the admin, I can see who I invited, what they asked, and any contact details 
 
 - ⚠️ Conversations page with invite label, date, length, tl;dr and transcript (frontend built against a mock, not yet connected)
 - ⚠️ Contact details shown beside the session (frontend built against a mock, not yet connected)
-- ⬜ A notification email containing only a link, with no contact details or conversation content
+- ⚠️ A notification email containing only a link, with no contact details or conversation content (built and tested; no SMTP provider set up yet)
+- ✅ `GET /admin/conversations` returns each session with its label, summary, transcript and contact details
 
 ### A7. I can honour a deletion request
 
 As the admin, I can delete one person's data when they ask.
 
-- ⬜ Deletes the session, transcript, summary and contact details together
+- ✅ `DELETE /admin/conversations/{id}` deletes the session, transcript, summary and contact details together, and nobody else's
 - ⬜ Documented steps for asking vendors to delete their copies, if they keep any
 
 ### A8. I control what the avatar knows

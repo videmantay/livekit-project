@@ -18,6 +18,7 @@ def get_terms() -> Terms:
     settings = get_settings()
     template = Template(Path(__file__).with_name("terms.md").read_text(encoding="utf-8"))
     text = template.substitute(
+        owner_name=settings.owner_name,
         legal_name=settings.terms_legal_name,
         contact_email=settings.terms_contact_email,
         retention_days=settings.retention_days,

@@ -1,11 +1,13 @@
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Path, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from google.cloud import firestore
+from livekit import api
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app import facts
+from app import conversations, facts, store
 from app.admin_auth import require_admin
 from app.agent_auth import require_agent
 from app.config import Settings, get_settings
@@ -16,6 +18,9 @@ from app.terms import get_terms
 
 InviteCode = Annotated[str, Field(min_length=1, max_length=64)]
 FactId = Annotated[str, Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
+# token_urlsafe(16) for sessions, and a SHA-256 hex digest for invites.
+SessionId = Annotated[str, Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
+InviteId = Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 DbDep = Annotated[firestore.Client, Depends(get_db)]
 
@@ -152,5 +157,98 @@ def published_facts(db: DbDep) -> dict:
     return live
 
 
+@internal.post("/sessions/{session_id}/transcript", status_code=201)
+def add_transcript_batch(
+    session_id: SessionId, body: conversations.TranscriptBatch, settings: SettingsDep, db: DbDep
+) -> dict:
+    """One batch of turns from the agent (A4). The final batch ends the call and summarizes it.
+
+    409 for a batch number already stored, including a replayed request, or after the call has
+    ended. Nothing is written then, so an agent retry that gets 409 is safe to drop.
+    """
+    try:
+        conversations.add_batch(db, session_id, body)
+    except conversations.NoSession:
+        raise HTTPException(status_code=404, detail="No such session") from None
+    except conversations.Duplicate:
+        raise HTTPException(status_code=409, detail="Batch already stored") from None
+    except conversations.SessionEnded:
+        raise HTTPException(status_code=409, detail="Session has ended") from None
+    if body.final:
+        conversations.end_session(db, settings, session_id, "agent")
+    return {"stored": True}
+
+
+# Admin: conversations and invites (A1, A2, A6, A7).
+
+
+@admin.get("/conversations")
+def list_conversations(db: DbDep) -> list[dict]:
+    return conversations.list_conversations(db)
+
+
+@admin.delete("/conversations/{session_id}", status_code=204)
+def delete_conversation(session_id: SessionId, db: DbDep) -> Response:
+    conversations.delete_conversation(db, session_id)
+    return Response(status_code=204)
+
+
+class NewInvite(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1, max_length=120)
+    sessionLimit: int = Field(default=2, ge=1, le=10)
+    expiresInDays: int = Field(default=14, ge=1, le=90)
+
+
+@admin.get("/invites")
+def list_invites(db: DbDep) -> list[dict]:
+    return store.list_invites(db)
+
+
+@admin.post("/invites", status_code=201)
+def create_invite(body: NewInvite, settings: SettingsDep, db: DbDep, response: Response) -> dict:
+    """The code is in this response only. It isn't stored, so it can't be shown again (A1)."""
+    expires_at = datetime.now(UTC) + timedelta(days=body.expiresInDays)
+    code, invite_id = store.create_invite(
+        db, body.label.strip(), body.sessionLimit, expires_at, settings.retention_days
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"invite": store.get_invite_view(db, invite_id), "code": code}
+
+
+@admin.post("/invites/{invite_id}/revoke")
+def revoke_invite(invite_id: InviteId, db: DbDep) -> dict:
+    invite = store.revoke_invite(db, invite_id)
+    if invite is None:
+        raise HTTPException(status_code=404, detail="No such invite")
+    return invite
+
+
 app.include_router(admin)
 app.include_router(internal)
+
+
+# LiveKit's webhook, the fallback that ends a call if the agent dies (ADR-9, A4). LiveKit signs
+# each request with the project's API key: a JWT in Authorization that carries the body's
+# SHA-256. A replayed room_finished finds the session already ended and changes nothing.
+@app.post("/webhooks/livekit")
+async def livekit_webhook(
+    request: Request,
+    settings: SettingsDep,
+    db: DbDep,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict:
+    receiver = api.WebhookReceiver(
+        api.TokenVerifier(settings.livekit_api_key, settings.livekit_api_secret.get_secret_value())
+    )
+    try:
+        event = receiver.receive((await request.body()).decode(), authorization or "")
+    except Exception:  # noqa: BLE001 - the library raises bare Exceptions; the reason isn't returned
+        raise HTTPException(status_code=401, detail="Bad signature") from None
+    if event.event != "room_finished":
+        return {"handled": False}
+    session_id = conversations.session_id_from_room(event.room.name)
+    if session_id is None:
+        return {"handled": False}
+    return {"handled": conversations.end_session(db, settings, session_id, "room_finished")}

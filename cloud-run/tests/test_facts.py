@@ -1,16 +1,13 @@
 import json
-import os
 import time
 from pathlib import Path
 
 import pytest
+from helpers import ADMIN, signed
 
-from app import admin_auth
+from app import import_facts
 from app.agent_auth import signature
 from app.import_facts import read_seed
-
-ADMIN = {"Authorization": "Bearer good-token"}
-SECRET = os.environ["AGENT_SIGNING_SECRET"].encode()
 
 FACT = {
     "section": "experience",
@@ -35,30 +32,6 @@ def clean_facts(db):
     for name in ("facts", "fact_versions", "fact_meta"):
         for doc in db.collection(name).stream():
             doc.reference.delete()
-
-
-@pytest.fixture(autouse=True)
-def fake_google(monkeypatch):
-    tokens = {
-        "good-token": {"email": "Admin@Example.com", "email_verified": True},
-        "other-account": {"email": "someone@example.com", "email_verified": True},
-        "unverified": {"email": "admin@example.com", "email_verified": False},
-    }
-
-    def verify(token):
-        if token not in tokens:
-            raise ValueError("invalid token")
-        return tokens[token]
-
-    monkeypatch.setattr(admin_auth, "verify_id_token", verify)
-
-
-def signed(path, secret=SECRET, timestamp=None, method="GET", body=b""):
-    timestamp = str(timestamp or int(time.time()))
-    return {
-        "X-Agent-Timestamp": timestamp,
-        "X-Agent-Signature": signature(secret, timestamp, method, path, body),
-    }
 
 
 def agent_facts(client):
@@ -278,3 +251,20 @@ def test_signature_matches_the_agent():
     secret, timestamp, method, path = vector
     expected = "3c48205d4bc6cd99d227f30885e077e6bacaa57113c3010eb233dba32965275b"
     assert signature(secret.encode(), timestamp, method, path, b"") == expected
+
+
+def test_the_sample_seed_is_valid_and_skips_unreviewed():
+    reviewed, skipped = read_seed(import_facts.REPO_ROOT / "profile.example" / "facts.yaml")
+    assert {fact.section for fact in reviewed} == set(import_facts.SECTIONS)
+    assert skipped == ["Kubernetes"]
+
+
+def test_seed_comes_from_the_profile(tmp_path, monkeypatch):
+    monkeypatch.setenv("PROFILE_DIR", str(tmp_path))
+    assert import_facts.default_seed() == tmp_path / "facts.yaml"
+
+    monkeypatch.delenv("PROFILE_DIR")
+    monkeypatch.setattr(import_facts, "REPO_ROOT", tmp_path)
+    assert import_facts.default_seed() == tmp_path / "profile.example" / "facts.yaml"
+    (tmp_path / "profile").mkdir()
+    assert import_facts.default_seed() == tmp_path / "profile" / "facts.yaml"

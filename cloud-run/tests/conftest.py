@@ -9,6 +9,7 @@ os.environ.update(
     LIVEKIT_API_SECRET="test-secret-that-is-long-enough-for-hs256",
     LIVEKIT_AGENT_NAME="test-agent",
     FIREBASE_PROJECT_ID="demo-portfolio",
+    OWNER_NAME="Sam Example",
     TERMS_LEGAL_NAME="Test Legal Name",
     TERMS_CONTACT_EMAIL="privacy@example.com",
     RATE_LIMIT_PER_MINUTE="1000",
@@ -18,6 +19,7 @@ os.environ.update(
 
 from fastapi.testclient import TestClient
 
+from app import admin_auth
 from app.main import app
 from app.rate_limit import get_limiter
 from app.store import create_invite, get_db
@@ -60,3 +62,19 @@ def session_body():
         }
 
     return _body
+
+
+@pytest.fixture(autouse=True)
+def fake_google(monkeypatch):
+    tokens = {
+        "good-token": {"email": "Admin@Example.com", "email_verified": True},
+        "other-account": {"email": "someone@example.com", "email_verified": True},
+        "unverified": {"email": "admin@example.com", "email_verified": False},
+    }
+
+    def verify(token):
+        if token not in tokens:
+            raise ValueError("invalid token")
+        return tokens[token]
+
+    monkeypatch.setattr(admin_auth, "verify_id_token", verify)

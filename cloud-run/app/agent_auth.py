@@ -2,8 +2,8 @@
 
 The agent signs `timestamp, method, path, sha256(body)` with HMAC-SHA256 and a secret shared
 only by the two services. Requests outside a five-minute window are refused, which limits replays.
-That's enough for reads, which change nothing. Transcript batches will add a stored nonce, so the
-same batch can't be written twice.
+That's enough for reads, which change nothing. For writes, each transcript batch has a number that
+is stored once, so a replay inside the window writes nothing and gets 409 (app/conversations.py).
 
 livekit/cloud_run.py signs the same way. Change both together.
 """

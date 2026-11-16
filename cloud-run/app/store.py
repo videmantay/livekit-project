@@ -111,3 +111,38 @@ def redeem_invite(
             raise InviteBusy from exc
         raise
     return session_id if redeemed else None
+
+
+def _invite_view(invite_id: str, invite: dict) -> dict:
+    """What admin sees. The code isn't stored, so it can't appear here (ADR-3, ADR-10)."""
+    return {
+        "id": invite_id,
+        "label": invite["label"],
+        "sessionLimit": invite["max_sessions"],
+        "sessionsUsed": invite["sessions_used"],
+        "expiresAt": invite["expires_at"].isoformat(),
+        "revoked": invite["revoked"],
+    }
+
+
+def get_invite_view(db: firestore.Client, invite_id: str) -> dict | None:
+    snapshot = db.collection("invites").document(invite_id).get()
+    return _invite_view(snapshot.id, snapshot.to_dict()) if snapshot.exists else None
+
+
+def list_invites(db: firestore.Client, limit: int = 200) -> list[dict]:
+    query = (
+        db.collection("invites")
+        .order_by("created_at", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+    )
+    return [_invite_view(s.id, s.to_dict()) for s in query.stream()]
+
+
+def revoke_invite(db: firestore.Client, invite_id: str) -> dict | None:
+    """Stops the code working at once. `delete_at` is unchanged (ADR-6). None if no such invite."""
+    ref = db.collection("invites").document(invite_id)
+    if not ref.get().exists:
+        return None
+    ref.update({"revoked": True})
+    return get_invite_view(db, invite_id)

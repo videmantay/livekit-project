@@ -35,6 +35,13 @@ def test_verify_returns_terms_with_settings_and_ai_disclosure(client, make_invit
     assert "$" not in body["text"]
 
 
+def test_terms_take_the_owner_name_from_config(client, make_invite):
+    code, _ = make_invite()
+    text = client.post("/invites/verify", json={"code": code}).json()["terms"]["text"]
+    assert "AI avatar of Sam Example (Test Legal Name)" in text
+    assert "Lee" not in text
+
+
 def test_docs_are_disabled(client):
     assert client.get("/docs").status_code == 404
     assert client.get("/openapi.json").status_code == 404

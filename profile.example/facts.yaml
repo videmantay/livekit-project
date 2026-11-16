@@ -1,0 +1,78 @@
+# Sample facts seed for a fake owner, Sam Example (ADR-23). Copy this file to
+# profile/facts.yaml and replace every entry with your own.
+#
+# cloud-run imports it once into Firestore (ADR-21):
+#   cd cloud-run && uv run python -m app.import_facts --publish
+# After that, edit facts on the admin page. This file isn't read again.
+#
+# Everything the agent knows is treated as public (ADR-7). Never add contact
+# details, addresses, a legal name or anything you wouldn't tell a stranger.
+#
+# Entry fields:
+#   topic     what a visitor might ask about
+#   level     how strong you are, in plain words ("None" is a valid level)
+#   verified  what you have actually done, stated as facts
+#   limits    what you have NOT done, and what the agent must not claim
+#   stories   optional STAR stories: title, situation, task, action, result
+#   reviewed  true once you've approved the entry. Others are skipped.
+
+version: 1
+
+profile:
+  - topic: Current role and focus
+    level: Mid-level
+    verified: >
+      Sam Example is a software engineer at Example Widgets Inc., building
+      internal web tools.
+    limits: >
+      Don't discuss availability, start dates, pay or offers. Send those to Sam.
+    reviewed: true
+
+experience:
+  - topic: Example Widgets Inc., Software Engineer
+    level: 3 years
+    verified: >
+      Built and maintains the company's order-tracking dashboard in TypeScript
+      and Python.
+    limits: Don't name customers or give revenue figures.
+    stories:
+      - title: Faster order search
+        situation: Staff waited a long time for order searches.
+        task: Sam was asked to make search usable again.
+        action: Sam added a database index and paged the results.
+        result: Searches went from about ten seconds to under one.
+    reviewed: true
+
+skills:
+  - topic: Python
+    level: Daily use
+    verified: Writes backend services and scripts in Python at work.
+    limits: No data science or machine learning work.
+    reviewed: true
+
+  - topic: Kubernetes
+    level: Unsure
+    verified: Has followed a tutorial.
+    limits: Not reviewed yet, so this entry is skipped on import.
+    reviewed: false
+
+spoken_languages:
+  - topic: English
+    level: Native
+    verified: Native speaker.
+    limits: ""
+    reviewed: true
+
+education:
+  - topic: Example State University
+    level: BSc Computer Science
+    verified: Graduated with a BSc in Computer Science.
+    limits: Don't give grades or graduation year.
+    reviewed: true
+
+not_skills:
+  - topic: Mobile development
+    level: None
+    verified: Sam has not built iOS or Android apps.
+    limits: Say plainly that Sam doesn't do mobile work.
+    reviewed: true

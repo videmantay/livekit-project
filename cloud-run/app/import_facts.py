@@ -1,6 +1,10 @@
-"""One-time import of the seed fact file into Firestore (ADR-21). Run from cloud-run/:
+"""One-time import of the profile's facts seed file into Firestore (ADR-21, ADR-23). Run from
+cloud-run/:
 
-uv run python -m app.import_facts ../livekit/facts/lee.yaml --publish
+uv run python -m app.import_facts --publish
+
+The seed is `facts.yaml` in the profile folder: PROFILE_DIR if set, else `profile/` at the repo
+root, else the fake sample in `profile.example/`. Pass a path to import another file.
 
 Only `reviewed: true` entries are imported. The rest are listed so Lee can finish them in admin.
 It refuses to run once any facts or versions exist, so it can't overwrite Lee's admin edits.
@@ -8,6 +12,7 @@ With --publish, the imported set goes live as version 1.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -16,6 +21,20 @@ from pydantic import ValidationError
 
 from app.facts import SECTIONS, FactInput, create_fact, publish
 from app.store import get_db
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SEED_NAME = "facts.yaml"
+
+
+def profile_dir() -> Path:
+    if configured := os.environ.get("PROFILE_DIR"):
+        return Path(configured)
+    real = REPO_ROOT / "profile"
+    return real if real.is_dir() else REPO_ROOT / "profile.example"
+
+
+def default_seed() -> Path:
+    return profile_dir() / SEED_NAME
 
 
 def _text(value: object) -> str:
@@ -57,9 +76,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("path", type=Path)
+    parser.add_argument("path", type=Path, nargs="?", help="Default: the profile's facts.yaml")
     parser.add_argument("--publish", action="store_true", help="Publish the import as version 1")
     args = parser.parse_args()
+
+    path = args.path or default_seed()
+    print(f"Importing {path}")
+    if path.resolve().parent == (REPO_ROOT / "profile.example").resolve():
+        print("This is the fake sample profile. Set PROFILE_DIR or add profile/ for a real one.")
 
     db = get_db()
     if any(db.collection("facts").limit(1).stream()) or any(
@@ -68,7 +92,7 @@ def main() -> None:
         sys.exit("Facts already exist. Edit them in admin instead of importing again.")
 
     try:
-        reviewed, skipped = read_seed(args.path)
+        reviewed, skipped = read_seed(path)
     except ValidationError as error:
         sys.exit(f"The seed file has an invalid entry:\n{error}")
 

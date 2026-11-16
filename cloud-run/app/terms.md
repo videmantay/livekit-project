@@ -1,10 +1,10 @@
 # Before you start
 
-This conversation is with an AI avatar of Lee ($legal_name). It is not the real person.
+This conversation is with an AI avatar of $owner_name ($legal_name). It is not the real person.
 
-**The avatar speaks for itself, not for Lee.** It can make mistakes. Nothing it says is a statement, promise, or agreement from Lee, including anything about pay, availability, or an offer. Please confirm anything important with Lee directly.
+**The avatar speaks for itself, not for $owner_name.** It can make mistakes. Nothing it says is a statement, promise, or agreement from $owner_name, including anything about pay, availability, or an offer. Please confirm anything important with $owner_name directly.
 
-**This conversation is saved.** Your speech is converted to text. The transcript and any contact details you give are stored, summarized by AI, and reviewed by Lee. No audio or video of you is saved by this site.
+**This conversation is saved.** Your speech is converted to text. The transcript and any contact details you give are stored, summarized by AI, and reviewed by $owner_name. No audio or video of you is saved by this site.
 
 **Other companies process this conversation** so the avatar can work: LiveKit (real-time connection), Tavus (avatar video), ElevenLabs (voice and speech-to-text), and Google (AI responses and data storage). Your speech and the transcript pass through their systems under their own terms.
 

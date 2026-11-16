@@ -26,7 +26,7 @@
 | 20 | Show language levels with real proof, not AI speech | Accepted |
 | 21 | Facts are edited in admin and fetched at call start | Accepted |
 | 22 | The portfolio page is in English, Spanish and Portuguese | Accepted |
-| 23 | The owner's profile is data, not code | Accepted, not built |
+| 23 | The owner's profile is data, not code | Accepted, partly built |
 
 ## ADR-1: One folder per deploy target
 
@@ -114,7 +114,7 @@ Visitor camera is out, because the agent doesn't need it and it adds privacy exp
 
 ## ADR-9: Transcripts go through `cloud-run`; summaries have no tools
 
-**Status:** Accepted, not built
+**Status:** Accepted, partly built: `cloud-run`'s endpoints, webhook and summary are built; the agent doesn't send batches yet
 
 **Context:** A crash shouldn't lose a conversation, and transcripts are untrusted input that can try to steer the tl;dr.
 
@@ -124,7 +124,7 @@ Visitor camera is out, because the agent doesn't need it and it adds privacy exp
 
 ## ADR-10: Admin uses Google sign-in, verified by `cloud-run`
 
-**Status:** Accepted, partly built: sign-in is checked for the facts endpoints
+**Status:** Accepted
 
 **Context:** Admin shows contact details and transcripts.
 
@@ -218,7 +218,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 ## ADR-19: The agent answers only from verified facts
 
-**Status:** Accepted, partly built: facts and rules are in the prompt; grounding tests and declined-question summaries aren't built
+**Status:** Accepted, partly built: facts and rules are in the prompt, and summaries list declined questions; grounding tests aren't built
 
 **Context:** Given only a résumé, the model confidently answered cybersecurity questions Lee couldn't answer. A résumé says what Lee has done, not what Lee hasn't, so the model fills the gaps from its own knowledge. Anything it says in Lee's voice sounds like Lee's expertise, and that oversells Lee to recruiters.
 
@@ -287,7 +287,7 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 
 ## ADR-23: The owner's profile is data, not code
 
-**Status:** Accepted, not built
+**Status:** Accepted, partly built: `cloud-run` takes the owner's name from config and the facts seed from the profile
 
 **Context:** The project will become open source, so anyone can run their own avatar. Today Lee's name, photos, portfolio text and greetings are written into the code, so anyone who forks it gets Lee's face and has to dig through the code to replace it.
 
