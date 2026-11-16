@@ -3,9 +3,14 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
+from google.api_core.exceptions import Aborted
 from google.cloud import firestore
 
 from app.config import get_settings
+
+
+class InviteBusy(Exception):
+    """Every transaction attempt hit contention. Nothing was written, so no session was used."""
 
 
 @lru_cache
@@ -18,9 +23,14 @@ def hash_code(code: str) -> str:
 
 
 def create_invite(
-    db: firestore.Client, label: str, max_sessions: int, expires_at: datetime
+    db: firestore.Client, label: str, max_sessions: int, expires_at: datetime, retention_days: int
 ) -> tuple[str, str]:
-    """Returns (code, invite_id). The code is never stored, so it can't be shown again."""
+    """Returns (code, invite_id). The code is never stored, so it can't be shown again.
+
+    The label can name a person, so the invite gets a `delete_at` (ADR-6). It counts from
+    expiry, because a session started just before expiry is kept for `retention_days`, and the
+    invite has to outlive the sessions that point to it.
+    """
     code = secrets.token_urlsafe(18)
     invite_id = hash_code(code)
     db.collection("invites").document(invite_id).set(
@@ -31,6 +41,7 @@ def create_invite(
             "expires_at": expires_at,
             "revoked": False,
             "created_at": datetime.now(UTC),
+            "delete_at": expires_at + timedelta(days=retention_days),
         }
     )
     return code, invite_id
@@ -82,12 +93,21 @@ def redeem_invite(
     }
     # Contact details stay apart from the transcript so each can be handled on its own.
     contact_doc = {**contact, "invite_id": invite_id, "delete_at": delete_at} if contact else None
-    redeemed = _redeem(
-        db.transaction(),
-        db.collection("invites").document(invite_id),
-        db.collection("sessions").document(session_id),
-        db.collection("contacts").document(session_id),
-        session,
-        contact_doc,
-    )
+    try:
+        redeemed = _redeem(
+            db.transaction(),
+            db.collection("invites").document(invite_id),
+            db.collection("sessions").document(session_id),
+            db.collection("contacts").document(session_id),
+            session,
+            contact_doc,
+        )
+    except Aborted as exc:
+        # An abort during the read isn't retried by the library, so it arrives bare.
+        raise InviteBusy from exc
+    except ValueError as exc:
+        # An abort at commit is retried, then wrapped in a ValueError once retries run out.
+        if isinstance(exc.__cause__, Aborted):
+            raise InviteBusy from exc
+        raise
     return session_id if redeemed else None

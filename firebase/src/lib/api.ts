@@ -12,16 +12,28 @@ export type SessionGrant = { room: string; token: string; url: string }
 
 export class ApiError extends Error {
   readonly status: number
-  constructor(status: number) {
+  /** Seconds from the Retry-After header, when the server sent one. */
+  readonly retryAfter?: number
+  constructor(status: number, retryAfter?: number) {
     super(`Request failed with ${status}`)
     this.status = status
+    this.retryAfter = retryAfter
   }
+}
+
+function parseRetryAfter(header: string | null): number | undefined {
+  if (header === null) return undefined
+  const seconds = Number(header)
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined
 }
 
 export interface VisitorApi {
   /** POST /invites/verify. Doesn't use a session. 403 or 429 on failure. */
   verifyInvite(code: string): Promise<Terms>
-  /** POST /sessions. Uses one session. 403, 409 (terms changed) or 429 on failure. */
+  /**
+   * POST /sessions. Uses one session. 403, 409 (terms changed) or 429 on failure, or 503
+   * with Retry-After when the invite is busy, in which case nothing was used.
+   */
   startSession(input: {
     code: string
     termsVersion: string
@@ -59,8 +71,11 @@ let mockTermsVersion = 'preview-1'
  * - `slow`: 429 at the gate
  * - `stale`: 409 on the first start, as if the terms changed after the page loaded
  * - `used`: valid at the gate, then 403 on start (sessions used up)
+ * - `busy`: 503 on the first start, then it works, as if the automatic retry got through
+ * - `jammed`: 503 on every start, so the busy message shows
  * - `drop`: the call connects, then the connection is lost
  */
+let mockBusyOnce = true
 export const mockVisitorApi: VisitorApi = {
   async verifyInvite(code) {
     await wait(400)
@@ -71,6 +86,11 @@ export const mockVisitorApi: VisitorApi = {
   async startSession({ code, termsVersion }) {
     await wait(600)
     if (code === 'used') throw new ApiError(403)
+    if (code === 'jammed') throw new ApiError(503, 1)
+    if (code === 'busy' && mockBusyOnce) {
+      mockBusyOnce = false
+      throw new ApiError(503, 1)
+    }
     if (code === 'stale' && mockTermsVersion === 'preview-1') {
       mockTermsVersion = 'preview-2'
       throw new ApiError(409)
@@ -88,7 +108,9 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (!response.ok) throw new ApiError(response.status)
+  if (!response.ok) {
+    throw new ApiError(response.status, parseRetryAfter(response.headers.get('Retry-After')))
+  }
   return response.json() as Promise<T>
 }
 

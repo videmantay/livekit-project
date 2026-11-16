@@ -22,6 +22,8 @@ At the `/invite` gate, any code works except these, which act out the failure st
 | `slow` | 429: the "wait a minute" message |
 | `stale` | 409 on start: the terms reload and the box is unticked again |
 | `used` | Passes the gate, then 403 on start: back to the gate |
+| `busy` | 503 on start, then the automatic retry a second later gets through |
+| `jammed` | 503 on every start: the "busy, no session was used" message |
 | `drop` | The call starts, then the connection is lost after 5 seconds |
 
 Refusing the microphone prompt shows the mic failure screen.

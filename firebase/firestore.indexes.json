@@ -1,6 +1,7 @@
 {
   "indexes": [],
   "fieldOverrides": [
+    { "collectionGroup": "invites", "fieldPath": "delete_at", "ttl": true, "indexes": [] },
     { "collectionGroup": "sessions", "fieldPath": "delete_at", "ttl": true, "indexes": [] },
     { "collectionGroup": "contacts", "fieldPath": "delete_at", "ttl": true, "indexes": [] },
     { "collectionGroup": "transcript", "fieldPath": "delete_at", "ttl": true, "indexes": [] }

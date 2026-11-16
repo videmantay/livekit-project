@@ -87,9 +87,9 @@ Visitor camera is out, because the agent doesn't need it and it adds privacy exp
 
 **Context:** Lee wants to review conversations, and visitors are told what's kept and for how long.
 
-**Decision:** Store `invites`, `sessions`, `sessions/{id}/transcript` and `contacts`. Keep text only, with no audio or video. Contacts stay apart from transcripts. Everything about a visitor gets a `delete_at`, and Firestore TTL removes it. Deletion requests are honoured sooner.
+**Decision:** Store `invites`, `sessions`, `sessions/{id}/transcript` and `contacts`. Keep text only, with no audio or video. Contacts stay apart from transcripts. Everything about a visitor gets a `delete_at`, and Firestore TTL removes it. Invites get one too, because their labels can name a person. It is set at creation to expiry plus the retention period, so an invite outlives every session that points to it. Revoking an invite doesn't change it. Deletion requests are honoured sooner.
 
-**Consequences:** The 90-day promise isn't enforced until the TTL config is deployed. Summaries are stored on the session, so they go with it. Invites have no `delete_at` yet, and their labels can name a person.
+**Consequences:** The 90-day promise isn't enforced until the TTL config is deployed. Summaries are stored on the session, so they go with it. An invite and its label stay visible to the admin for up to 90 days after expiry.
 
 ## ADR-7: Everything the agent knows is treated as public
 

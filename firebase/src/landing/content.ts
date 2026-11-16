@@ -122,12 +122,23 @@ export const PROJECTS: Project[] = [
       es: 'Una plataforma de aprendizaje de idiomas con IA para primaria y secundaria (K–12), para inglés, español, portugués y francés. Me encargo de todo el ciclo: hablar con docentes, diseño, desarrollo, despliegue y soporte. En beta.',
       pt: 'Uma plataforma de aprendizado de idiomas com IA para o ensino básico (K–12), para inglês, espanhol, português e francês. Cuido de todo o ciclo: conversar com docentes, design, desenvolvimento, implantação e suporte. Em beta.',
     },
-    tags: ['React', 'Vite', 'Firebase', 'Python', 'GCP', 'Claude', 'Gemini'],
+    tags: ['React', 'Mantine','Firebase', 'Python', 'FastAPI', 'GCP', 'Claude', 'Gemini'],
   },
   {
     name: 'Awesome Aussie Possum Posse',
     url: 'https://awesomeaussiepossumposse.com',
     youtube: 'https://www.youtube.com/@awesausspossposs',
+    role:{
+      en: 'Author and Media Engineer, 2023 – present',
+      es: 'Autor e ingeniero de medios, 2023 – actualidad',
+      pt: 'Autor e engenheiro de mídia, 2023 – presente',
+    },
+    description: {
+      en: 'A children’s book and YouTube channel about how a group of seven Aussie possums helped shape the Wild West. I wrote it with my daughter, and contracted an illustrator. I built the website and I manage the YouTube channel.',
+      es: 'Un libro y canal de YouTube sobre cómo un grupo de siete zarigüeyas australianas ayudaron a moldear el Oeste Salvaje. Lo escribí con mi hija y contraté a un ilustrador. Construí el sitio web y gestiono el canal de YouTube.',
+      pt: 'Um livro e canal do YouTube sobre como um grupo de sete gambás australianas ajudaram a moldar o Oeste Selvagem. Escrevi-o com minha filha e contratei um ilustrador. Construí o site e gerencio o canal do YouTube.'
+    },
+    tags: ['React', 'Mantine','Firebase', 'GCP', 'Claude' , 'Adobe Illustrator', 'Adobe Photoshop', 'Adobe Animate'],
   },
   {
     name: { en: 'This site’s AI avatar', es: 'El avatar de IA de este sitio', pt: 'O avatar de IA deste site' },

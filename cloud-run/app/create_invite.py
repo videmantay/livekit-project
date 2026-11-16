@@ -6,6 +6,7 @@ uv run python -m app.create_invite --label "Acme recruiter" --expires-days 14
 import argparse
 from datetime import UTC, datetime, timedelta
 
+from app.config import get_settings
 from app.store import create_invite, get_db
 
 
@@ -17,7 +18,9 @@ def main() -> None:
     args = parser.parse_args()
 
     expires_at = datetime.now(UTC) + timedelta(days=args.expires_days)
-    code, invite_id = create_invite(get_db(), args.label, args.max_sessions, expires_at)
+    code, invite_id = create_invite(
+        get_db(), args.label, args.max_sessions, expires_at, get_settings().retention_days
+    )
     print(f"Code (shown once): {code}")
     print(f"Invite ID: {invite_id}")
     print(f"Expires: {expires_at:%Y-%m-%d}")

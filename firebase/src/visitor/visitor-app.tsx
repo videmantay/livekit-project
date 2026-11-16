@@ -5,7 +5,7 @@ import type { CallEnd } from './call-screen'
 import { ContactScreen } from './contact-screen'
 import { EndScreen, type EndReason } from './end-screen'
 import { GateScreen } from './gate-screen'
-import { GENERIC_CODE_ERROR, RATE_LIMIT_ERROR, START_ERROR } from './messages'
+import { BUSY_ERROR, GENERIC_CODE_ERROR, RATE_LIMIT_ERROR, START_ERROR } from './messages'
 import { MicScreen } from './mic-screen'
 import { TermsScreen } from './terms-screen'
 
@@ -21,6 +21,20 @@ type Step =
   | { name: 'call'; grant: SessionGrant; stream: MediaStream; failConnection: boolean }
   | { name: 'ended'; reason: EndReason }
 
+// A 503 means the invite was busy and nothing was used, so one automatic retry is safe.
+// The wait is capped so a large Retry-After can't leave the visitor staring at a spinner.
+const MAX_RETRY_WAIT_SECONDS = 5
+
+async function startSessionWithRetry(input: Parameters<typeof visitorApi.startSession>[0]) {
+  try {
+    return await visitorApi.startSession(input)
+  } catch (err) {
+    if (!(err instanceof ApiError && err.status === 503)) throw err
+    const seconds = Math.min(err.retryAfter ?? 1, MAX_RETRY_WAIT_SECONDS)
+    await new Promise((resolve) => setTimeout(resolve, seconds * 1000))
+    return visitorApi.startSession(input)
+  }
+}
 
 export function VisitorApp() {
   const [step, setStep] = useState<Step>({ name: 'gate' })
@@ -32,7 +46,7 @@ export function VisitorApp() {
 
     let grant: SessionGrant
     try {
-      grant = await visitorApi.startSession({ code, termsVersion: terms.version, contact })
+      grant = await startSessionWithRetry({ code, termsVersion: terms.version, contact })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // Terms changed since the page loaded: fetch the current ones and ask again (I3).
@@ -54,6 +68,7 @@ export function VisitorApp() {
         return
       }
       if (err instanceof ApiError && err.status === 429) return RATE_LIMIT_ERROR
+      if (err instanceof ApiError && err.status === 503) return BUSY_ERROR
       return START_ERROR
     }
 

@@ -19,6 +19,7 @@ import {
   type Locale,
   type Project,
 } from './content'
+import { LocaleFlag } from './flags'
 
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
@@ -150,8 +151,8 @@ function Hero({ locale }: { locale: Locale }) {
         <img
           src={heroImage}
           alt="Lee"
-          width={1200}
-          height={1060}
+          width={1400}
+          height={1200}
           fetchPriority="high"
           className="pointer-events-none mx-auto w-full max-w-md [mask-image:linear-gradient(to_bottom,black_70%,transparent)] select-none lg:absolute lg:bottom-0 lg:left-[56%] lg:w-[min(46rem,52%)] lg:max-w-none lg:-translate-x-1/2"
         />
@@ -198,22 +199,26 @@ function Hero({ locale }: { locale: Locale }) {
 // Plain links, so each language has its own URL that can be shared.
 function LanguageSwitcher({ locale }: { locale: Locale }) {
   return (
-    <ul className="flex items-center text-xs font-semibold tracking-[0.08em]" aria-label={UI[locale].languageLabel}>
-      {LOCALES.map((l) => (
-        <li key={l}>
-          <a
-            href={LOCALE_PATHS[l]}
-            hrefLang={l}
-            lang={l}
-            title={LANGUAGE_NAMES[l]}
-            aria-label={LANGUAGE_NAMES[l]}
-            aria-current={l === locale ? 'page' : undefined}
-            className="block rounded px-1.5 py-1 text-hero-muted uppercase hover:text-hero-foreground aria-[current=page]:text-hero-foreground aria-[current=page]:underline aria-[current=page]:underline-offset-4"
-          >
-            {l}
-          </a>
-        </li>
-      ))}
+    <ul className="flex items-center gap-1" aria-label={UI[locale].languageLabel}>
+      {LOCALES.map((l) => {
+        return (
+          <li key={l}>
+            <a
+              href={LOCALE_PATHS[l]}
+              hrefLang={l}
+              lang={l}
+              title={LANGUAGE_NAMES[l]}
+              aria-label={LANGUAGE_NAMES[l]}
+              aria-current={l === locale ? 'page' : undefined}
+              className="block rounded p-1 opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100 aria-[current=page]:opacity-100"
+            >
+              <span className="block h-4 w-6 overflow-hidden rounded-[2px] ring-1 ring-hero-foreground/20 in-aria-[current=page]:ring-2 in-aria-[current=page]:ring-hero-foreground">
+                <LocaleFlag locale={l} />
+              </span>
+            </a>
+          </li>
+        )
+      })}
     </ul>
   )
 }

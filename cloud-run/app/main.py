@@ -11,7 +11,7 @@ from app.agent_auth import require_agent
 from app.config import Settings, get_settings
 from app.livekit_tokens import create_visitor_token
 from app.rate_limit import rate_limit
-from app.store import check_invite, get_db, redeem_invite
+from app.store import InviteBusy, check_invite, get_db, redeem_invite
 from app.terms import get_terms
 
 InviteCode = Annotated[str, Field(min_length=1, max_length=64)]
@@ -29,6 +29,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     # Authorization carries the admin's Google ID token (ADR-10).
     allow_headers=["Content-Type", "Authorization"],
+    # The frontend reads Retry-After on a busy 503 from POST /sessions (I9).
+    expose_headers=["Retry-After"],
 )
 
 
@@ -75,7 +77,15 @@ def start_session(body: StartSession, settings: SettingsDep, db: DbDep) -> dict:
     if body.terms_version != get_terms().version:
         raise HTTPException(status_code=409, detail="Terms have changed")
     contact = body.contact.model_dump(exclude_none=True) if body.contact else None
-    session_id = redeem_invite(db, body.code, body.terms_version, contact, settings.retention_days)
+    try:
+        session_id = redeem_invite(
+            db, body.code, body.terms_version, contact, settings.retention_days
+        )
+    except InviteBusy:
+        # Contention on one invite, not a server fault. Nothing was used, so a retry is safe.
+        raise HTTPException(
+            status_code=503, detail="Busy, try again", headers={"Retry-After": "1"}
+        ) from None
     if session_id is None:
         raise INVALID_INVITE
     room, token = create_visitor_token(settings, session_id)

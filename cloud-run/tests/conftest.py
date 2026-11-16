@@ -44,7 +44,7 @@ def db():
 @pytest.fixture
 def make_invite(db):
     def _make(max_sessions=2, expires_in=timedelta(days=1)):
-        return create_invite(db, "Test", max_sessions, datetime.now(UTC) + expires_in)
+        return create_invite(db, "Test", max_sessions, datetime.now(UTC) + expires_in, 90)
 
     return _make
 

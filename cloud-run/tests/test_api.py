@@ -7,6 +7,9 @@ import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
+from google.api_core.exceptions import Aborted
+from google.cloud.firestore_v1.document import DocumentReference
+from google.cloud.firestore_v1.transaction import Transaction
 from starlette.requests import Request
 
 from app.main import app
@@ -66,6 +69,16 @@ def test_code_is_never_stored(db, make_invite):
     code, invite_id = make_invite()
     assert invite_id == hash_code(code)
     assert code not in json.dumps(invite(db, invite_id), default=str)
+
+
+def test_invite_is_deleted_after_its_last_possible_session(client, db, make_invite, session_body):
+    code, invite_id = make_invite(expires_in=timedelta(days=14))
+    stored = invite(db, invite_id)
+    assert (stored["delete_at"] - stored["expires_at"]).days == 90
+
+    room = client.post("/sessions", json=session_body(code)).json()["room"]
+    session = db.collection("sessions").document(room.removeprefix("session-")).get().to_dict()
+    assert stored["delete_at"] >= session["delete_at"]
 
 
 def test_session_records_consent(client, db, make_invite, session_body):
@@ -180,8 +193,32 @@ def test_concurrent_redemption_cannot_exceed_the_limit(db, make_invite, session_
     with ThreadPoolExecutor(max_workers=8) as pool:
         statuses = list(pool.map(attempt, range(8)))
 
-    assert statuses.count(201) == 1
-    assert invite(db, invite_id)["sessions_used"] == 1
+    # Under contention a request may get 503 instead of 403, but never a 500, and the count
+    # matches the grants exactly. Whether any request wins depends on timing, so the test
+    # doesn't require one.
+    assert set(statuses) <= {201, 403, 503}
+    assert statuses.count(201) <= 1
+    assert invite(db, invite_id)["sessions_used"] == statuses.count(201)
+
+
+@pytest.mark.parametrize("abort_on", ["read", "commit"])
+def test_exhausted_retries_return_503_and_use_no_session(
+    client, db, make_invite, session_body, monkeypatch, abort_on
+):
+    code, invite_id = make_invite()
+    target = (Transaction, "_commit") if abort_on == "commit" else (DocumentReference, "get")
+
+    def always_abort(*args, **kwargs):
+        raise Aborted("contention")
+
+    monkeypatch.setattr(*target, always_abort)
+    response = client.post("/sessions", json=session_body(code))
+    monkeypatch.undo()
+
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "1"
+    assert "token" not in response.json()
+    assert invite(db, invite_id)["sessions_used"] == 0
 
 
 def test_cors_allows_only_configured_origins(client):
@@ -204,6 +241,31 @@ def test_firestore_rules_deny_browsers(collection):
     assert httpx.get(f"{base}/anything").status_code == 403
     write = httpx.patch(f"{base}/anything", json={"fields": {}})
     assert write.status_code == 403
+
+
+@pytest.mark.parametrize("path", ["/invites/verify", "/sessions"])
+def test_endpoints_return_429_past_the_limit(
+    client, db, make_invite, session_body, monkeypatch, path
+):
+    limiter = RateLimiter(limit=2)
+    monkeypatch.setattr("app.rate_limit.get_limiter", lambda: limiter)
+    code, invite_id = make_invite(max_sessions=5)
+    body = session_body(code) if path == "/sessions" else {"code": code}
+    me = {"X-Forwarded-For": "203.0.113.7"}
+
+    statuses = [client.post(path, json=body, headers=me).status_code for _ in range(3)]
+    assert statuses[2] == 429
+    assert statuses[:2] == ([201, 201] if path == "/sessions" else [200, 200])
+
+    # The limit is checked before the invite, so a blocked request uses no session and
+    # can't be used to probe codes.
+    used = invite(db, invite_id)["sessions_used"]
+    assert client.post(path, json=body, headers=me).status_code == 429
+    assert client.post(path, json={"code": "no-such-code"}, headers=me).status_code == 429
+    assert invite(db, invite_id)["sessions_used"] == used
+
+    other = {"X-Forwarded-For": "203.0.113.8"}
+    assert client.post("/invites/verify", json={"code": code}, headers=other).status_code == 200
 
 
 def test_rate_limiter_blocks_then_recovers():

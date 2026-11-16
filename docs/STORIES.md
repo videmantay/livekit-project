@@ -8,7 +8,7 @@ Status of each acceptance check:
 - ⚠️ Built, but unreliable or only partly checked
 - ⬜ Not built yet
 
-Last checked 2026-11-01, and cloud-run's suite again on 2026-11-15 (58 pass). 23 of 24 tests pass every time, and the other fails intermittently (see I9). Nothing has run against a real LiveKit project or a deployed service yet.
+Last checked 2026-11-01, and cloud-run's suite again on 2026-11-16 (66 pass, and the concurrency tests passed 20 runs in a row). Nothing has run against a real LiveKit project or a deployed service yet.
 
 ## Uninvited visitor
 
@@ -26,7 +26,7 @@ As an uninvited visitor, when I enter a code that doesn't work, I see one generi
 As the site owner, I want guessing to be impractical, so codes can't be found by brute force.
 
 - ✅ Codes are 144-bit random values, and only their hash is stored
-- ⚠️ The limiter blocks and recovers in a unit test, but the 429 isn't tested through the endpoints
+- ✅ Both visitor endpoints return 429 past the limit, before the code is checked, so a blocked request uses no session and can't probe codes. Other addresses aren't affected
 - ⚠️ The limit counts per Cloud Run instance, and the client IP logic is unverified on real Cloud Run
 - ⚠️ The gate screen shows a separate "try again shortly" message on a 429 (connected to cloud-run, not yet tried in a browser end to end)
 
@@ -141,7 +141,7 @@ As an invited visitor and as Lee, we need the avatar to stay within public infor
 As an invited visitor, I know my invite covers a set number of sessions, and a problem gives me a clear next step.
 
 - ✅ The session limit is enforced, and separate sessions get separate rooms
-- ⚠️ **Known bug:** simultaneous redemptions can exhaust Firestore's retries and return a 500. The concurrency test failed on 3 of 8 runs. No run showed the limit exceeded, but failed runs stop before that check.
+- ✅ Simultaneous redemptions never exceed the limit. Contention that exhausts Firestore's retries returns 503 with `Retry-After` and uses no session, never a 500
 - ⚠️ The start button blocks double clicks, which would otherwise spend two sessions (connected to cloud-run, not yet tried in a browser end to end)
 - ⚠️ A declined mic or lost connection after starting explains what happened and how to reach Lee. Either one uses a session (ADR-4). A dropped room or the agent leaving shows the "connection lost" screen (built against LiveKit, not yet tried with a real project).
 
@@ -149,7 +149,7 @@ As an invited visitor, I know my invite covers a set number of sessions, and a p
 
 As an invited visitor, my data is deleted automatically, and I can ask for it to be deleted sooner.
 
-- ✅ Sessions and contacts get a `delete_at` 90 days out
+- ✅ Sessions and contacts get a `delete_at` 90 days out, and invites 90 days after they expire, so a label naming a person doesn't stay forever
 - ⚠️ TTL is configured but not deployed, and the emulator doesn't run it, so nothing is being deleted yet
 - ⬜ Transcripts and summaries get the same `delete_at`
 - ⬜ The deletion request process exists (A7)
@@ -177,7 +177,8 @@ Lee, the only admin.
 As the admin, I can create an invite with a label, a session limit and an expiry, and see the code once.
 
 - ✅ The code is random, stored only as a hash, and can't be shown again
-- ⚠️ The CLI exists, but the command itself has no test and hasn't run against real Firestore
+- ✅ The CLI applies its label, session limit, expiry and defaults, and the code it prints works at `POST /sessions`
+- ⚠️ The CLI hasn't run against real Firestore
 - ⚠️ Access codes page in `/admin`, showing labels and never codes (frontend built against a mock, not yet connected)
 
 ### A2. I can revoke an invite
