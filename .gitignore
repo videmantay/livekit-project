@@ -20,6 +20,9 @@ __pycache__/
 node_modules/
 dist/
 
+# Owner profile: the real one lives in a private repo (ADR-23)
+profile/
+
 # Firebase
 .firebase/
 *-debug.log

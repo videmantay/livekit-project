@@ -26,6 +26,7 @@
 | 20 | Show language levels with real proof, not AI speech | Accepted |
 | 21 | Facts are edited in admin and fetched at call start | Accepted |
 | 22 | The portfolio page is in English, Spanish and Portuguese | Accepted |
+| 23 | The owner's profile is data, not code | Accepted, not built |
 
 ## ADR-1: One folder per deploy target
 
@@ -283,3 +284,22 @@ The first version covers Conversations and Access codes. Pipeline, tags, transcr
 **Alternative rejected:** Choosing the language from the browser settings and redirecting. It hides the English page from people who want it and makes links depend on who opens them.
 
 **Consequences:** Every change to the portfolio text needs all three languages. The translations need Lee's review, and the Portuguese needs a fluent reviewer too, because Lee's Portuguese is about B2 (ADR-20). If the avatar starts speaking Spanish (ADR-20, stage 3), the Spanish page's note about the call changes with it.
+
+## ADR-23: The owner's profile is data, not code
+
+**Status:** Accepted, not built
+
+**Context:** The project will become open source, so anyone can run their own avatar. Today Lee's name, photos, portfolio text and greetings are written into the code, so anyone who forks it gets Lee's face and has to dig through the code to replace it.
+
+**Decision:** Everything about the owner lives in one profile folder, and the code reads it.
+
+- `profile.example/` is committed. It describes a sample owner who is clearly fake, with a placeholder silhouette photo, made-up jobs and sample facts, so a fork works out of the box and nobody ships Lee's face by accident.
+- `profile/` is gitignored. Lee's real profile lives in a separate private repo and is checked out into `profile/` locally and in each deploy. When `profile/` is missing, each target falls back to `profile.example/`.
+- The profile holds the owner's display name, links, domain, portfolio text in every language, images, audio clips, greetings and style prompt, and a facts seed file for the one-time import.
+- `firebase` reads it at build time through a `@profile` import alias. `livekit` reads it from `PROFILE_DIR`, and the profile is bundled into the agent build. `cloud-run` gets the owner's name from config, as it already does for the legal name.
+- Code, UI text and prompts never name the owner. They use the name from the profile.
+- Facts stay in Firestore once imported (ADR-21). The legal name, contact email, and the Tavus and ElevenLabs IDs stay in config and secrets (ADR-14), because they're per-deploy settings, not content.
+
+**Alternative rejected:** A private fork for Lee's site. It would drift away from the public repo with every change, and fixes would have to be copied across by hand. Putting all of it in env vars was also rejected, because images and three-language text don't fit in env vars.
+
+**Consequences:** Each deploy needs one more checkout step. Tests run against `profile.example/`, so the sample has to stay complete, and any new kind of owner content must be added to the sample too. Lee's photos are still in git history. They're already public on the live site, so rewriting history is only about giving the open-source repo a clean start, and it's decided once, before that release. Existing docs say "Lee" and are renamed to "the owner" before release.
