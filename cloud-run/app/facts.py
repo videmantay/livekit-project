@@ -10,14 +10,17 @@ so they have no `delete_at`. Everything published is treated as public (ADR-7).
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Literal, get_args
 
 from google.cloud import firestore
 from pydantic import BaseModel, ConfigDict, Field
 
 # Prompt order in the agent. `not_skills` is what Lee doesn't have, so a "no" is stated (ADR-19).
-SECTIONS = ("profile", "experience", "skills", "spoken_languages", "education", "not_skills")
-Section = Literal["profile", "experience", "skills", "spoken_languages", "education", "not_skills"]
+# Matches livekit's facts.SECTIONS and firebase's FACT_SECTIONS. Change all three together.
+Section = Literal[
+    "profile", "experience", "skills", "spoken_languages", "education", "hobbies", "not_skills"
+]
+SECTIONS: tuple[str, ...] = get_args(Section)
 
 Text = Field(default="", max_length=2000)
 

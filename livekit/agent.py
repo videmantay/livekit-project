@@ -14,7 +14,6 @@ Run it:
 """
 
 import logging
-import os
 import random
 from collections.abc import AsyncIterable
 
@@ -35,6 +34,7 @@ from livekit.agents.voice.io import TimedString
 from livekit.plugins import ai_coustics, elevenlabs, google, silero, tavus
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
+from config import AgentSettings
 from delivery import DELIVERY_NOTES, allow_listed_tags_only, without_tags
 from facts import (
     GROUNDING_RULES,
@@ -46,15 +46,11 @@ from facts import (
 )
 from persona import GREETINGS, VOICE_NOTES
 
+# The SDK and plugins read their own keys from the environment, so .env goes there first.
 load_dotenv()
+settings = AgentSettings()
 
 logger = logging.getLogger("agent")
-
-# Explicit dispatch (U3): with a name set, the agent only joins rooms it is dispatched to.
-AGENT_NAME = os.getenv("LIVEKIT_AGENT_NAME", "portfolio-twin")
-
-# No default voice: the twin must never fall back to a stock voice by accident.
-ELEVENLABS_VOICE_ID = os.environ["ELEVENLABS_VOICE_ID"]
 
 # ElevenLabs' realtime model for agents. It reads audio tags such as [laughs] and treats
 # ellipses and dashes as pauses (see delivery.py). The plugin streams it over the
@@ -104,7 +100,7 @@ async def _end_tavus_conversation(avatar: tavus.AvatarSession | None) -> None:
     try:
         async with aiohttp.ClientSession() as http, http.post(
             f"{TAVUS_API_URL}/conversations/{conversation_id}/end",
-            headers={"x-api-key": os.environ["TAVUS_API_KEY"]},
+            headers={"x-api-key": settings.tavus_api_key.get_secret_value()},
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             if not response.ok:
@@ -169,7 +165,7 @@ class Assistant(Agent):
 server = AgentServer()
 
 
-@server.rtc_session(agent_name=AGENT_NAME)
+@server.rtc_session(agent_name=settings.livekit_agent_name)
 async def entrypoint(ctx: agents.JobContext) -> None:
     # Fetched per call, so a publish in admin reaches the next call with no deploy (ADR-21).
     facts: FactSet | None
@@ -194,7 +190,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         ),
         # English only (ADR-20).
         tts=elevenlabs.TTS(
-            voice_id=ELEVENLABS_VOICE_ID, model=ELEVENLABS_MODEL, language="en"
+            voice_id=settings.elevenlabs_voice_id, model=ELEVENLABS_MODEL, language="en"
         ),
         # The defaults, plus the allowlist that drops any tag not in delivery.ALLOWED_TAGS.
         tts_text_transforms=["filter_markdown", "filter_emoji", allow_listed_tags_only],
@@ -210,7 +206,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         # shows a stock Tavus face. Read here, not at import, so console runs without it.
         # The stock PAL is used: echo mode, so Tavus only moves the face to our audio and
         # never hears the visitor or writes replies.
-        avatar = tavus.AvatarSession(face_id=os.environ["TAVUS_FACE_ID"])
+        avatar = tavus.AvatarSession(face_id=settings.tavus_face_id)
         # The plugin never ends the Tavus conversation, so every call would hold a slot until
         # Tavus times it out, and the account soon hits its concurrent-conversation cap.
         # Registered before start, so a start that fails partway still cleans up.

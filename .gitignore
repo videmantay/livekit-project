@@ -43,8 +43,7 @@ firebase/TODO.md
 CLAUDE.md
 CLAUDE.local.md
 
-# GitHub Actions
-.github/workflows/*.yml
+# Local tooling
 .githooks/*
 .mcp.json
 skills-lock.json

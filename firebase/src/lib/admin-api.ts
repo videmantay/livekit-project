@@ -37,13 +37,14 @@ export type Invite = {
   revoked: boolean
 }
 
-// Prompt order in the agent. Matches cloud-run's facts.SECTIONS.
+// Prompt order in the agent. Matches cloud-run's and livekit's facts.SECTIONS.
 export const FACT_SECTIONS = {
   profile: 'Profile',
   experience: 'Experience',
   skills: 'Skills',
   spoken_languages: 'Spoken languages',
   education: 'Education',
+  hobbies: 'Hobbies and interests',
   not_skills: "Skills Lee doesn't have",
 } as const
 

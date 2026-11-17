@@ -70,6 +70,13 @@ education:
     limits: Don't give grades or graduation year.
     reviewed: true
 
+hobbies:
+  - topic: Rock climbing
+    level: Weekend climber
+    verified: Sam climbs indoors most weekends.
+    limits: Don't name gyms or say where Sam lives.
+    reviewed: true
+
 not_skills:
   - topic: Mobile development
     level: None

@@ -322,9 +322,9 @@ hobbies:
     reviewed: true
 
   - topic: Travel
-    level: Lee has traveled to all over South America and Europe.
-    verified: Lee has travelled to  Spain twice, France, Italy and Greece. In South America he has been to Peru, Boliva and Brazil. He's also been to Canada, Costa Rica and Mexico.
-    limits: Lee has not traveled to every country in the world. He has not lived in every country in the world.
+    level: Has visited 10 countries, listed under verified.
+    verified: In Europe, Lee has been to Spain (twice), France, Italy and Greece. In South America, Peru, Bolivia and Brazil. Lee has also been to Canada, Costa Rica and Mexico.
+    limits: Only the countries listed. Never say Lee has been all over a continent or region, and never name another country. Don't add dates, reasons or details about the trips.
     source: Lee
     reviewed: true
 

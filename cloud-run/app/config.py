@@ -1,14 +1,19 @@
+import os
 from functools import lru_cache
+from pathlib import Path
 
-from dotenv import load_dotenv
 from pydantic import Field, SecretStr
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Exports .env to the process too, so Google clients see GOOGLE_APPLICATION_CREDENTIALS.
-load_dotenv()
+# Local development only. Real environment variables win, and Cloud Run has no file.
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
+    # Tests turn the file off (tests/conftest.py). A key in .env with no field here is an error,
+    # which catches typos. Validation errors hide their input, so secrets stay out of logs (ADR-14).
+    model_config = SettingsConfigDict(env_file=ENV_FILE, hide_input_in_errors=True)
+
     livekit_url: str
     livekit_api_key: str
     livekit_api_secret: SecretStr
@@ -16,6 +21,9 @@ class Settings(BaseSettings):
 
     firebase_project_id: str
     allowed_origins: str = "http://localhost:5173"
+    # Local development only: a service account key kept outside this repo. Unset on Cloud Run,
+    # which uses the service's own identity.
+    google_application_credentials: str = ""
 
     # The owner's display name, used in the terms and the summary prompt (ADR-23).
     owner_name: str
@@ -52,4 +60,10 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    # Google's clients read this from the process environment, not from Settings.
+    if settings.google_application_credentials:
+        os.environ.setdefault(
+            "GOOGLE_APPLICATION_CREDENTIALS", settings.google_application_credentials
+        )
+    return settings

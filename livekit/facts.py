@@ -12,17 +12,16 @@ Where facts come from:
 """
 
 import logging
-import os
-from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
 import yaml
+from pydantic import BaseModel, BeforeValidator, ConfigDict
 
 from cloud_run import fetch_published_facts
+from config import FactsSettings
 
 logger = logging.getLogger("facts")
-
-DEFAULT_FACTS_PATH = Path(__file__).parent / "facts" / "lee.yaml"
 
 # Section keys, in prompt order, with the heading each gets in the prompt.
 SECTIONS: tuple[tuple[str, str], ...] = (
@@ -31,6 +30,7 @@ SECTIONS: tuple[tuple[str, str], ...] = (
     ("skills", "Skills"),
     ("spoken_languages", "Spoken languages"),
     ("education", "Education"),
+    ("hobbies", "Hobbies and interests"),
     ("not_skills", "Skills Lee does NOT have (say no plainly)"),
 )
 STORY_PARTS = ("situation", "task", "action", "result")
@@ -65,27 +65,42 @@ STORY_RULES = (
 )
 
 
-@dataclass(frozen=True)
-class Story:
-    title: str
-    situation: str
-    task: str
-    action: str
-    result: str
+def _text(value: object) -> str:
+    # YAML folded blocks keep a trailing newline, and empty fields may be None.
+    return " ".join(str(value or "").split())
 
 
-@dataclass(frozen=True)
-class Fact:
+# Text from the seed file or cloud-run, with whitespace collapsed and None read as empty.
+Text = Annotated[str, BeforeValidator(_text)]
+
+# Frozen, and fields the agent doesn't use (`reviewed`, ids) are dropped.
+_FROZEN = ConfigDict(frozen=True, extra="ignore")
+
+
+class Story(BaseModel):
+    model_config = _FROZEN
+
+    title: Text = ""
+    situation: Text = ""
+    task: Text = ""
+    action: Text = ""
+    result: Text = ""
+
+
+class Fact(BaseModel):
+    model_config = _FROZEN
+
     section: str
-    topic: str
-    level: str
-    verified: str
-    limits: str
-    stories: tuple[Story, ...] = ()
+    topic: Text = ""
+    level: Text = ""
+    verified: Text = ""
+    limits: Text = ""
+    stories: Annotated[tuple[Story, ...], BeforeValidator(lambda v: v or ())] = ()
 
 
-@dataclass(frozen=True)
-class FactSet:
+class FactSet(BaseModel):
+    model_config = _FROZEN
+
     # Recorded with each call, so Lee knows what the agent knew at the time (ADR-21).
     version: str
     facts: tuple[Fact, ...]
@@ -95,23 +110,8 @@ class NoFactsError(RuntimeError):
     """There are no published facts, so the agent can't answer and must end the call."""
 
 
-def _text(value: object) -> str:
-    # YAML folded blocks keep a trailing newline, and empty fields may be None.
-    return " ".join(str(value or "").split())
-
-
 def _fact(section: str, entry: dict) -> Fact:
-    return Fact(
-        section=section,
-        topic=_text(entry.get("topic")),
-        level=_text(entry.get("level")),
-        verified=_text(entry.get("verified")),
-        limits=_text(entry.get("limits")),
-        stories=tuple(
-            Story(title=_text(s.get("title")), **{p: _text(s.get(p)) for p in STORY_PARTS})
-            for s in entry.get("stories") or ()
-        ),
-    )
+    return Fact.model_validate({**entry, "section": section})
 
 
 def load_facts(path: Path) -> FactSet:
@@ -149,13 +149,13 @@ _last_fetched: FactSet | None = None
 async def get_published_facts() -> FactSet:
     """The facts for this call. The only place that knows where facts come from."""
     global _last_fetched
-    base_url = os.getenv("CLOUD_RUN_URL")
-    if not base_url:
-        return load_facts(Path(os.getenv("FACTS_PATH", DEFAULT_FACTS_PATH)))
+    settings = FactsSettings()
+    if not settings.cloud_run_url:
+        return load_facts(settings.facts_path)
 
-    secret = os.environ["AGENT_SIGNING_SECRET"].encode()
+    secret = settings.agent_signing_secret.get_secret_value().encode()
     try:
-        payload = await fetch_published_facts(base_url, secret)
+        payload = await fetch_published_facts(settings.cloud_run_url, secret)
     # Any failure falls back to the cached version.
     except Exception as error:
         if _last_fetched is None:

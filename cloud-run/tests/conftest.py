@@ -3,6 +3,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.config import Settings
+
+# Tests are hermetic: no real config from cloud-run/.env or the shell.
+Settings.model_config["env_file"] = None
+for name in Settings.model_fields:
+    os.environ.pop(name.upper(), None)
+
 os.environ.update(
     LIVEKIT_URL="wss://test.livekit.cloud",
     LIVEKIT_API_KEY="test-key",

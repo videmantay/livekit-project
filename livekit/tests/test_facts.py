@@ -5,7 +5,8 @@ import pytest
 import yaml
 
 import facts
-from facts import DEFAULT_FACTS_PATH, NoFactsError, facts_prompt, load_facts
+from config import DEFAULT_FACTS_PATH
+from facts import NoFactsError, facts_prompt, load_facts
 
 FIXTURE = """
 version: 3
