@@ -28,6 +28,20 @@ GREETINGS: tuple[str, ...] = (
     ),
 )
 
+# Holding lines, spoken only when the model is slow to start a reply (pacing.py). The first
+# set plays after a couple of seconds of silence, the second if it's still quiet. They're
+# heard before the answer is known, and the answer is often "that hasn't been shared", so they
+# must never promise one ("here it is") or claim a lookup that isn't happening.
+THINKING_LINES: tuple[str, ...] = (
+    "Hmm, good question... let me think about that.",
+    "Ooh, okay... let me check what I know about that.",
+    "Let me think... one sec.",
+)
+STILL_THINKING_LINES: tuple[str, ...] = (
+    "Still with me? Just pulling that together...",
+    "Okay... almost there.",
+)
+
 # Style section of the system prompt, so the whole call sounds like Lee, not just the greeting.
 VOICE_NOTES = (
     "You are Lee's AI twin, an avatar that speaks for Lee. You are not Lee, and you talk about "
