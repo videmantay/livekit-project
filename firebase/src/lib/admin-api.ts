@@ -1,18 +1,28 @@
 // Admin API. Real calls go to cloud-run with a Google ID token (ADR-10).
-// Facts are connected to cloud-run when admin sign-in is configured. Conversations and access
-// codes still use the in-memory mock, until cloud-run has those endpoints.
+// With admin sign-in configured, every call goes to cloud-run. Without it, the whole admin
+// area uses the in-memory mock below, for local preview. The two are never mixed.
 
 import { adminAuthConfigured, adminIdToken } from './admin-auth'
 
-export type TranscriptTurn = { speaker: 'visitor' | 'agent'; text: string }
+/** `violation` marks a turn the agent counted as inappropriate (I8). */
+export type TranscriptTurn = { speaker: 'visitor' | 'agent'; text: string; violation?: boolean }
+
+/** `created`: a token was issued but no transcript has arrived. `active`: in progress. */
+export type SessionStatus = 'created' | 'active' | 'ended'
+
+/** Null until the call ends. `empty`: nothing was said. `failed`: the model call failed. */
+export type SummaryStatus = 'done' | 'empty' | 'failed' | null
 
 export type Conversation = {
   id: string
   inviteLabel: string
   startedAt: string
   durationSeconds: number
-  factsVersion: number
+  status: SessionStatus
+  /** Null if the agent never sent a transcript batch. */
+  factsVersion: number | null
   summary: string
+  summaryStatus: SummaryStatus
   declinedQuestions: string[]
   transcript: TranscriptTurn[]
   contact?: { name?: string; email?: string; company?: string }
@@ -84,6 +94,8 @@ let conversations: Conversation[] = [
     inviteLabel: 'Sample: platform team recruiter',
     startedAt: daysFromNow(-1),
     durationSeconds: 11 * 60 + 42,
+    status: 'ended',
+    summaryStatus: 'done',
     factsVersion: 2,
     summary:
       'Asked about full-stack work and AI integration, then about on-site deployment. Wanted to know about Kubernetes in production, which the avatar declined.',
@@ -102,6 +114,8 @@ let conversations: Conversation[] = [
     inviteLabel: 'Sample: startup founder',
     startedAt: daysFromNow(-3),
     durationSeconds: 4 * 60 + 5,
+    status: 'ended',
+    summaryStatus: 'done',
     factsVersion: 1,
     summary: 'Short call about travel and customer-facing work. No contact details left.',
     declinedQuestions: [],
@@ -258,6 +272,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!response.ok) throw new AdminApiError(response.status)
+  // DELETE /admin/conversations/{id} answers 204 with no body.
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -276,4 +292,21 @@ export const cloudRunFactsApi: Pick<AdminApi, 'getFacts' | 'saveFact' | 'deleteF
     rollbackFacts: (version) => call('POST', '/admin/facts/rollback', { version }),
   }
 
-export const adminApi: AdminApi = adminAuthConfigured ? { ...mockAdminApi, ...cloudRunFactsApi } : mockAdminApi
+/** Invites on cloud-run (A1, A7). The code is in the create response only, never stored (ADR-3). */
+export const cloudRunInvitesApi: Pick<AdminApi, 'listInvites' | 'createInvite' | 'revokeInvite'> = {
+  listInvites: () => call('GET', '/admin/invites'),
+  createInvite: (input) => call('POST', '/admin/invites', input),
+  revokeInvite: (id) => call('POST', `/admin/invites/${encodeURIComponent(id)}/revoke`),
+}
+
+/** Conversations on cloud-run (A6, A7). Newest first, at most 100. */
+export const cloudRunConversationsApi: Pick<AdminApi, 'listConversations' | 'deleteConversation'> = {
+  listConversations: () => call('GET', '/admin/conversations'),
+  deleteConversation: (id) => call('DELETE', `/admin/conversations/${encodeURIComponent(id)}`),
+}
+
+// Spelled out rather than spread over the mock, so a new AdminApi method that has no real
+// version fails the type check instead of quietly using fake data.
+export const adminApi: AdminApi = adminAuthConfigured
+  ? { ...cloudRunFactsApi, ...cloudRunInvitesApi, ...cloudRunConversationsApi }
+  : mockAdminApi

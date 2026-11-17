@@ -121,7 +121,7 @@ As an invited visitor, I can speak with the avatar about Lee's experience and en
 - ⬜ Agent with Tavus, ElevenLabs and Gemini
 - ⚠️ Mute and End Session controls (connected to cloud-run, not yet tried in a browser end to end)
 - ⚠️ The visitor sees the session length before starting, and a warning before it ends (connected to cloud-run, not yet tried in a browser end to end)
-- ⬜ The agent ends the call at `MAX_SESSION_MINUTES` (15). The browser can't extend it.
+- ⬜ The agent ends the call at `MAX_SESSION_MINUTES` (6 for the beta). The browser can't extend it.
 
 ### I8. The avatar can't overstep
 
@@ -152,7 +152,7 @@ As an invited visitor, my data is deleted automatically, and I can ask for it to
 - ✅ Sessions and contacts get a `delete_at` 90 days out, and invites 90 days after they expire, so a label naming a person doesn't stay forever
 - ⚠️ TTL is configured but not deployed, and the emulator doesn't run it, so nothing is being deleted yet
 - ✅ Transcripts get the session's `delete_at`, and summaries are stored on the session, so both go with it
-- ⚠️ The deletion request process exists (A7): `cloud-run` deletes one person's data together, and the admin page isn't connected yet
+- ⚠️ The deletion request process exists (A7): `cloud-run` deletes one person's data together, and the admin page is connected but not yet tried with a real Google sign-in
 
 ### I11. I get an honest picture of Lee's languages
 
@@ -180,7 +180,7 @@ As the admin, I can create an invite with a label, a session limit and an expiry
 - ✅ The CLI applies its label, session limit, expiry and defaults, and the code it prints works at `POST /sessions`
 - ⚠️ The CLI hasn't run against real Firestore
 - ✅ `POST /admin/invites` creates one and returns the code once, with `Cache-Control: no-store`. `GET /admin/invites` lists labels and counts, never codes
-- ⚠️ Access codes page in `/admin`, showing labels and never codes (frontend built against a mock, not yet connected)
+- ⚠️ Access codes page in `/admin`, showing labels and never codes (connected to `cloud-run`, not yet tried with a real Google sign-in)
 
 ### A2. I can revoke an invite
 
@@ -188,7 +188,7 @@ As the admin, I can stop a code working immediately.
 
 - ✅ A revoked code is refused
 - ✅ `POST /admin/invites/{id}/revoke` stops the code at once, for both verify and sessions
-- ⚠️ Revoke action in `/admin` (frontend built against a mock, not yet connected)
+- ⚠️ Revoke action in `/admin` (connected to `cloud-run`, not yet tried with a real Google sign-in)
 
 ### A3. Only I can get into admin
 
@@ -221,8 +221,8 @@ As the admin, I read a short summary of each conversation and can compare it wit
 
 As the admin, I can see who I invited, what they asked, and any contact details they left.
 
-- ⚠️ Conversations page with invite label, date, length, tl;dr and transcript (frontend built against a mock, not yet connected)
-- ⚠️ Contact details shown beside the session (frontend built against a mock, not yet connected)
+- ⚠️ Conversations page with invite label, date, length, tl;dr and transcript, including calls in progress, missing or failed summaries, and flagged turns (connected to `cloud-run`, not yet tried with a real Google sign-in)
+- ⚠️ Contact details shown beside the session (connected to `cloud-run`, not yet tried with a real Google sign-in)
 - ⚠️ A notification email containing only a link, with no contact details or conversation content (built and tested; no SMTP provider set up yet)
 - ✅ `GET /admin/conversations` returns each session with its label, summary, transcript and contact details
 
@@ -231,6 +231,7 @@ As the admin, I can see who I invited, what they asked, and any contact details 
 As the admin, I can delete one person's data when they ask.
 
 - ✅ `DELETE /admin/conversations/{id}` deletes the session, transcript, summary and contact details together, and nobody else's
+- ⚠️ "Delete this person's data" in `/admin` (connected to `cloud-run`, not yet tried with a real Google sign-in)
 - ⬜ Documented steps for asking vendors to delete their copies, if they keep any
 
 ### A8. I control what the avatar knows
@@ -249,8 +250,8 @@ As the admin, I decide what the avatar can repeat, assuming a visitor can extrac
 
 As the admin, I can add an answer for a question the avatar declined, so the next visitor gets it.
 
-- ⚠️ Each declined question in a summary has an "Add as fact" action (ADR-19, ADR-21) (frontend built against a mock, not yet connected)
-- ⚠️ It opens a draft with the question filled in, copying nothing about who asked (frontend built against a mock, not yet connected)
+- ⚠️ Each declined question in a summary has an "Add as fact" action (ADR-19, ADR-21) (connected to `cloud-run`, not yet tried with a real Google sign-in)
+- ⚠️ It opens a draft with the question filled in, copying nothing about who asked (connected to `cloud-run`, not yet tried with a real Google sign-in)
 
 ### A9. Secrets stay out of this public repo
 

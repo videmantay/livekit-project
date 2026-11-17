@@ -8,13 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import {
   adminApi,
-  AdminApiError,
   FACT_SECTIONS,
   type Fact,
   type FactSection,
   type FactsState,
   type Story,
 } from '@/lib/admin-api'
+import { errorText } from './errors'
 import { formatDateTime } from './format'
 
 type Change = 'new' | 'edited' | 'published'
@@ -31,13 +31,6 @@ const STORY_PARTS = [
 ] as const
 
 const sameFact = ({ id: _a, ...a }: Fact, { id: _b, ...b }: Fact) => JSON.stringify(a) === JSON.stringify(b)
-
-function errorText(error: unknown) {
-  if (error instanceof AdminApiError && error.status === 401) {
-    return "Your sign-in was refused. Sign out and back in with Lee's account."
-  }
-  return "That didn't work. Check the connection and try again."
-}
 
 /** `seed` is a declined question from "Add as fact". Remount with a new key to apply another. */
 export function FactsPage({ seed }: { seed?: string }) {

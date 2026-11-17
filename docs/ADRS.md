@@ -80,7 +80,7 @@ The UI adapts to the code, which replaces last session's suggestion to shorten i
 
 Visitor camera is out, because the agent doesn't need it and it adds privacy exposure. Typed questions are out for now, because they need data publishing.
 
-**Consequences:** The browser can't enforce the session limit. The agent must end the call at `MAX_SESSION_MINUTES`, which stays at 15.
+**Consequences:** The browser can't enforce the session limit. The agent must end the call at `MAX_SESSION_MINUTES`, which is 6 for the beta.
 
 ## ADR-6: Text-only storage with 90-day deletion
 

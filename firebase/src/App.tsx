@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { PreviewBanner } from '@/components/preview-banner'
+import { adminAuthConfigured } from '@/lib/admin-config'
 import { visitorPreview } from '@/lib/api'
 import { localeFromPath } from '@/landing/content'
 import { LandingPage } from '@/landing/landing-page'
@@ -14,8 +15,8 @@ export default function App() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/'
 
   if (path.startsWith('/admin') || path.startsWith('/invite')) {
-    // Admin is still mostly mocked, so its banner stays until every page is connected.
-    const preview = path.startsWith('/admin') || visitorPreview
+    // The banner shows whenever the area on screen is running on its mock.
+    const preview = path.startsWith('/admin') ? !adminAuthConfigured : visitorPreview
     return (
       <div className="flex min-h-svh flex-col">
         {preview && <PreviewBanner />}

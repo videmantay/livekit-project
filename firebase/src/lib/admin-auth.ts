@@ -6,15 +6,9 @@
 
 import { initializeApp } from 'firebase/app'
 import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup, signOut, type Auth } from 'firebase/auth'
+import { adminAuthConfigured, firebaseConfig as config } from './admin-config'
 
-const config = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-}
-
-export const adminAuthConfigured = Boolean(config.apiKey && config.authDomain && config.projectId)
+export { adminAuthConfigured }
 
 let auth: Auth | undefined
 function getAdminAuth(): Auth {

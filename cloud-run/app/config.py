@@ -41,7 +41,8 @@ class Settings(BaseSettings):
 
     retention_days: int = 90
     token_ttl_seconds: int = 300
-    max_session_minutes: int = 15
+    # 6 for the beta. Must match firebase's MAX_SESSION_MINUTES.
+    max_session_minutes: int = 6
     rate_limit_per_minute: int = 10
 
     @property

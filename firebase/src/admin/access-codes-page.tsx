@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { adminApi, type Invite } from '@/lib/admin-api'
 import { ConfirmButton } from './confirm-button'
+import { errorText } from './errors'
 import { formatDate } from './format'
 
 function status(invite: Invite): { text: string; variant: 'secondary' | 'outline' | 'destructive' } {
@@ -18,9 +19,10 @@ function status(invite: Invite): { text: string; variant: 'secondary' | 'outline
 export function AccessCodesPage() {
   const [invites, setInvites] = useState<Invite[]>()
   const [newCode, setNewCode] = useState<{ label: string; code: string }>()
+  const [loadError, setLoadError] = useState<string>()
 
   useEffect(() => {
-    adminApi.listInvites().then(setInvites)
+    adminApi.listInvites().then(setInvites, (e) => setLoadError(errorText(e)))
   }, [])
 
   return (
@@ -37,7 +39,7 @@ export function AccessCodesPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-xl font-semibold">Invites</h2>
         {!invites ? (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className={loadError ? 'text-destructive' : 'text-muted-foreground'}>{loadError ?? 'Loading…'}</p>
         ) : !invites.length ? (
           <p className="text-muted-foreground">No invites yet.</p>
         ) : (
@@ -82,15 +84,19 @@ function CreateInviteForm({ onCreated }: { onCreated: (invite: Invite, code: str
   const [sessionLimit, setSessionLimit] = useState(2)
   const [expiresInDays, setExpiresInDays] = useState(14)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (busy || !label.trim()) return
     setBusy(true)
+    setError(undefined)
     try {
       const { invite, code } = await adminApi.createInvite({ label: label.trim(), sessionLimit, expiresInDays })
       onCreated(invite, code)
       setLabel('')
+    } catch (e) {
+      setError(errorText(e))
     } finally {
       setBusy(false)
     }
@@ -140,6 +146,11 @@ function CreateInviteForm({ onCreated }: { onCreated: (invite: Invite, code: str
             {busy ? 'Creating…' : 'Create'}
           </Button>
         </form>
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </CardContent>
     </Card>
   )

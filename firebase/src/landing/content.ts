@@ -44,7 +44,7 @@ const UI_EN = {
   inviteShort: 'Invite',
   heading: "I'm Lee, a senior software engineer",
   summary:
-    'I build full-stack software and AI integrations, working directly with the people who use it. Before engineering, I spent six years teaching, and I still teach part time.',
+    'I build full-stack software and AI integrations, working directly with the people who use it. Before engineering, I was in education as a teacher and coordinator, and I still teach part time at a local community college.',
   jumpToProjects: 'Jump to projects',
   aboutTitle: 'About me',
   aboutBody: 'Full-stack software and AI integrations, built with the people who use them.',
@@ -69,7 +69,7 @@ export const UI: Record<Locale, UiStrings> = {
     inviteShort: 'Invitación',
     heading: 'Soy Lee y creo software',
     summary:
-      'Desarrollo software full-stack e integraciones de IA, en contacto directo con las personas que lo usan. Antes de dedicarme a la ingeniería, pasé seis años en la docencia, y sigo dando clases a tiempo parcial.',
+      'Desarrollo software full-stack e integraciones de IA, en contacto directo con las personas que lo usan. Antes de dedicarme a la ingeniería, trabajaba en educación como un profesor y coordinador, y sigo dando clases a tiempo parcial en un colegio comunitario local.',
     jumpToProjects: 'Ir a proyectos',
     aboutTitle: 'Sobre mí',
     aboutBody: 'Software full-stack e integraciones de IA, creados junto a quienes los usan.',
@@ -91,7 +91,7 @@ export const UI: Record<Locale, UiStrings> = {
     inviteShort: 'Convite',
     heading: 'Sou Lee e crio software',
     summary:
-      'Desenvolvo software full-stack e integrações de IA, trabalhando diretamente com as pessoas que o usam. Antes da engenharia, passei seis anos dando aula, e ainda dou aulas em meio período.',
+      'Desenvolvo software full-stack e integrações de IA, trabalhando diretamente com as pessoas que o usam. Antes da engenharia, trabalhava em educação como um professor e coordenador, e ainda dou aulas em meio período em um colégio comunitário local.',
     jumpToProjects: 'Ir para projetos',
     aboutTitle: 'Sobre mim',
     aboutBody: 'Software full-stack e integrações de IA, criados com quem os usa.',

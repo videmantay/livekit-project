@@ -6,7 +6,7 @@ export const LINKEDIN_URL = import.meta.env.VITE_LINKEDIN_URL || 'https://www.li
 export const YOUTUBE_URL: string = import.meta.env.VITE_YOUTUBE_URL || ''
 
 // Must match cloud-run and the agent. The agent enforces it; the browser only shows it (ADR-5).
-export const MAX_SESSION_MINUTES = 15
+export const MAX_SESSION_MINUTES = 6
 export const END_WARNING_MINUTES = 2
 
 // Static clip of Lee speaking Portuguese (ADR-20). Shows a placeholder until the file exists.

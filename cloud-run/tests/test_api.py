@@ -173,7 +173,7 @@ def test_token_is_limited_to_one_room_and_the_microphone(client, make_invite, se
     assert agent["agentName"] == "test-agent"
     metadata = json.loads(agent["metadata"])
     assert metadata["session_id"] == body["room"].removeprefix("session-")
-    assert metadata["max_session_minutes"] == 15
+    assert metadata["max_session_minutes"] == 6
 
 
 def test_sessions_get_separate_rooms(client, make_invite, session_body):

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { errorText } from './errors'
 
 /** A two-step button for irreversible actions: the first click asks, the second does it. */
 export function ConfirmButton({
@@ -15,6 +16,7 @@ export function ConfirmButton({
 }) {
   const [asking, setAsking] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string>()
 
   if (!asking) {
     return (
@@ -33,20 +35,36 @@ export function ConfirmButton({
           disabled={busy}
           onClick={async () => {
             setBusy(true)
+            setError(undefined)
             try {
               await onConfirm()
+              setAsking(false)
+            } catch (e) {
+              // Stay open, so it's clear the action didn't happen and can be retried.
+              setError(errorText(e))
             } finally {
               setBusy(false)
-              setAsking(false)
             }
           }}
         >
           {busy ? 'Working…' : confirmLabel}
         </Button>
-        <Button variant="outline" disabled={busy} onClick={() => setAsking(false)}>
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={() => {
+            setAsking(false)
+            setError(undefined)
+          }}
+        >
           Cancel
         </Button>
       </div>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

@@ -12,7 +12,12 @@ The visitor and admin frontend: React 19, TypeScript, Vite, Tailwind v4 and shad
 
 ## Preview mode
 
-The frontend isn't connected to `cloud-run` yet. Every request goes to an in-memory mock (`src/lib/api.ts` and `src/lib/admin-api.ts`) with sample data, and a banner says so. Admin sign-in is a button that lets you straight in.
+Each area falls back to an in-memory mock with sample data when its config is missing, and a banner says so. The two switches are independent:
+
+- `/invite` uses `cloud-run` when `VITE_API_URL` is set, else the mock in `src/lib/api.ts`.
+- `/admin` uses `cloud-run` and real Google sign-in when the `VITE_FIREBASE_*` values are set, else the mock in `src/lib/admin-api.ts`, where sign-in is a button that lets you straight in. Admin pages are never part real and part mock.
+
+Codes made on the mock admin page are never stored, so a real `/invite` page always refuses them.
 
 At the `/invite` gate, any code works except these, which act out the failure states:
 
