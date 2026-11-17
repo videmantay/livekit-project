@@ -69,3 +69,71 @@ Tests run against the Firestore emulator, which needs Java. Run this from `fireb
 ```bash
 firebase emulators:exec --only firestore --project demo-portfolio "cd ../cloud-run && uv run pytest"
 ```
+
+## Deploy
+
+`deploy.sh` builds the `Dockerfile` with Cloud Build and deploys it to Cloud Run. Run the commands in Git Bash, with `PROJECT` set to the Firebase project ID.
+
+### One-time setup
+
+Turn on the APIs, and create a service account that can reach only Firestore and Vertex AI:
+
+```bash
+gcloud config set project $PROJECT
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com secretmanager.googleapis.com aiplatform.googleapis.com
+
+gcloud iam service-accounts create gatekeeper
+SA=gatekeeper@$PROJECT.iam.gserviceaccount.com
+gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/datastore.user
+gcloud projects add-iam-policy-binding $PROJECT --member=serviceAccount:$SA --role=roles/aiplatform.user
+```
+
+Store the secrets in Secret Manager. `read -s` keeps each value out of the shell history. `agent-signing-secret` must be the same value the agent uses.
+
+```bash
+for name in livekit-api-secret agent-signing-secret smtp-password admin-email; do
+  read -rsp "$name: " v; echo
+  printf '%s' "$v" | gcloud secrets create $name --data-file=-
+  gcloud secrets add-iam-policy-binding $name --member=serviceAccount:$SA \
+    --role=roles/secretmanager.secretAccessor
+done
+```
+
+To change a secret later, run `printf '%s' "$v" | gcloud secrets versions add <name> --data-file=-` and deploy again.
+
+### Production config
+
+Create `.env.production.yaml` here. It's gitignored and blocked by the pre-commit hook, because it holds the legal name and contact email (ADR-14). It takes the non-secret keys from `.env.example`:
+
+```yaml
+LIVEKIT_URL: wss://your-project.livekit.cloud
+LIVEKIT_API_KEY: ...
+LIVEKIT_AGENT_NAME: portfolio-twin
+FIREBASE_PROJECT_ID: ...
+ALLOWED_ORIGINS: https://lee.videmantay.net
+ADMIN_URL: https://lee.videmantay.net/admin
+OWNER_NAME: ...
+TERMS_LEGAL_NAME: ...
+TERMS_CONTACT_EMAIL: ...
+GEMINI_MODEL: gemini-3.5-flash
+VERTEX_LOCATION: global
+SMTP_HOST: ...
+SMTP_PORT: "587"
+SMTP_USERNAME: ...
+NOTIFY_FROM: ...
+```
+
+Leave the secrets and `GOOGLE_APPLICATION_CREDENTIALS` out of this file. Cloud Run uses the service account, and `deploy.sh` refuses to deploy if the file contains any of them.
+
+### Deploy
+
+```bash
+bash deploy.sh
+```
+
+The defaults are the `gatekeeper` service in `us-central1`, with at most 2 instances. Override them with `REGION`, `SERVICE`, `SERVICE_ACCOUNT` or `MAX_INSTANCES`. The script ends by calling `/health`.
+
+`.gcloudignore` keeps `.env`, tests and the virtualenv out of the upload, and the image copies only `app/`.
+
+After the first deploy, put the service URL into the frontend's API URL and the agent's Cloud Run URL, and point LiveKit Cloud's webhook at `<url>/webhooks/livekit`.

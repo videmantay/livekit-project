@@ -1,0 +1,15 @@
+# Files gcloud must not upload to Cloud Build. The secret patterns are repeated here
+# so they stay excluded even if .gitignore changes (ADR-14).
+.gcloudignore
+.env
+.env.*
+*service-account*.json
+*firebase-adminsdk*.json
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+tests/
+deploy.sh
+
+#!include:.gitignore

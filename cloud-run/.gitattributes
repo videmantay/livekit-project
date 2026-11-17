@@ -1,0 +1,3 @@
+# Keep LF endings on Windows checkouts, or bash and the Linux build choke on CR.
+*.sh text eol=lf
+Dockerfile text eol=lf
