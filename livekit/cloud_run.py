@@ -7,6 +7,7 @@ Change both together. tests/test_cloud_run.py pins a vector that cloud-run's tes
 
 import hashlib
 import hmac
+import json
 import time
 
 import aiohttp
@@ -39,3 +40,21 @@ async def fetch_published_facts(base_url: str, secret: bytes) -> dict | None:
             return None
         resp.raise_for_status()
         return await resp.json()
+
+
+async def post_transcript_batch(
+    base_url: str, secret: bytes, session_id: str, batch: dict, timeout: float
+) -> int:
+    """Sends one transcript batch and returns the HTTP status. Raises on network errors only.
+
+    The body is signed byte for byte, so it's serialized here and sent as is.
+    """
+    path = f"/internal/sessions/{session_id}/transcript"
+    body = json.dumps(batch, separators=(",", ":")).encode()
+    headers = {"Content-Type": "application/json", **signed_headers(secret, "POST", path, body)}
+    async with (
+        aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as http,
+        http.post(base_url.rstrip("/") + path, data=body, headers=headers) as resp,
+    ):
+        # The body is never read or logged: it could echo the request (ADR-14).
+        return resp.status

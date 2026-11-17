@@ -1,0 +1,11 @@
+# Kept out of the build upload. The secret patterns are repeated here so they stay excluded
+# even if .gitignore changes (ADR-14).
+.env
+.env.*
+!.env.example
+*.secrets
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+tests/

@@ -203,7 +203,7 @@ As the admin, I sign in with Google, and nobody else gets in.
 As the admin, I get the transcript even if something fails mid-call.
 
 - ✅ `cloud-run`'s signed internal endpoint stores numbered transcript batches, with any violations marked
-- ⬜ The agent sends transcript turns to it in batches
+- ⚠️ The agent sends transcript turns to it in batches, with the facts version and Gemini-blocked turns marked (tested with a fake `cloud-run`, not yet in a real call)
 - ✅ Text only, with no audio or video: turns are a speaker and text, and other fields are refused
 - ✅ A LiveKit `room_finished` webhook ends the session if the agent didn't (tested with a signed fake event, not yet with LiveKit Cloud)
 - ✅ Forged, tampered, expired or replayed calls to both endpoints are refused, and a replay writes nothing

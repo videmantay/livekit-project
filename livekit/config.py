@@ -18,14 +18,14 @@ DEFAULT_FACTS_PATH = Path(__file__).parent / "facts" / "lee.yaml"
 _CONFIG = SettingsConfigDict(hide_input_in_errors=True)
 
 
-class FactsSettings(BaseSettings):
-    """Where the facts come from (facts.py, ADR-21). Read at each call start."""
+class CloudRunSettings(BaseSettings):
+    """How the agent reaches cloud-run's signed /internal/* endpoints (ADR-2, ADR-9)."""
 
     model_config = _CONFIG
 
-    # With it set, facts come from cloud-run. Without it, from the local seed file.
+    # With it set, facts come from cloud-run and transcripts go to it. Without it, facts come
+    # from the local seed file and transcripts aren't sent, for local development.
     cloud_run_url: str = ""
-    facts_path: Path = DEFAULT_FACTS_PATH
     # Shared with cloud-run, which checks the agent's signed requests (ADR-9).
     agent_signing_secret: SecretStr = SecretStr("")
 
@@ -34,6 +34,12 @@ class FactsSettings(BaseSettings):
         if self.cloud_run_url and len(self.agent_signing_secret.get_secret_value()) < 32:
             raise ValueError("AGENT_SIGNING_SECRET needs 32+ characters when CLOUD_RUN_URL is set")
         return self
+
+
+class FactsSettings(CloudRunSettings):
+    """Where the facts come from (facts.py, ADR-21). Read at each call start."""
+
+    facts_path: Path = DEFAULT_FACTS_PATH
 
 
 class AgentSettings(BaseSettings):

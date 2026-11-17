@@ -6,7 +6,15 @@ The AI twin, deployed to LiveKit Cloud. It joins only rooms dispatched by the `c
 
 Copy `.env.example` to `.env` for local development. In production, store these values as LiveKit Cloud agent secrets.
 
-Anything in the agent's prompt can be extracted by a visitor, so it should only contain information that's already public. It must also be verified by Lee, because the agent answers onlycd from that material (ADR-19).
+Anything in the agent's prompt can be extracted by a visitor, so it should only contain information that's already public. It must also be verified by Lee, because the agent answers only from that material (ADR-19).
+
+## Transcripts
+
+The agent sends each call's turns to `cloud-run` (`POST /internal/sessions/{id}/transcript`, see `cloud-run/README.md`), signed with `AGENT_SIGNING_SECRET` (`transcript.py`). The session ID comes from the dispatch metadata that `cloud-run` sets. A batch goes every few turns during the call, and the final one goes from `on_session_end`, after the session closes and before the agent leaves the room, so it reaches `cloud-run` ahead of LiveKit's `room_finished` webhook. When the time limit ends a call, the final batch is sent before the room is deleted, for the same reason.
+
+Agent turns have their audio tags stripped. Turns Gemini blocked are marked as violations. Logs show batch numbers, turn counts and statuses, never text.
+
+Nothing is sent when `CLOUD_RUN_URL` is unset, or when the dispatch has no session ID, as with `lk dispatch create` in the playground.
 
 ## Running locally
 

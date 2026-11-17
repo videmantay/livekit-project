@@ -3,7 +3,8 @@
 Pipeline: LiveKit Inference STT -> Gemini 3.5 Flash (Google plugin, own key)
 -> ElevenLabs TTS (plugin, own key) -> Tavus avatar, which lip-syncs to that
 audio. Lee's published facts go into the prompt (facts.py), fetched from cloud-run at each call
-start, or read from the local seed file when CLOUD_RUN_URL is unset (ADR-21).
+start, or read from the local seed file when CLOUD_RUN_URL is unset (ADR-21). The transcript
+goes back to cloud-run in batches (transcript.py, A4).
 
 Needs GOOGLE_API_KEY, ELEVEN_API_KEY and ELEVENLABS_VOICE_ID in .env, plus
 TAVUS_API_KEY and TAVUS_FACE_ID for the avatar.
@@ -13,9 +14,11 @@ Run it:
     uv run agent.py dev       # connect to LiveKit Cloud, then see the avatar in the Agent Console
 """
 
+import asyncio
+import json
 import logging
 import random
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, Awaitable, Callable
 
 import aiohttp
 from dotenv import load_dotenv
@@ -25,6 +28,7 @@ from livekit.agents import (
     AgentServer,
     AgentSession,
     APIStatusError,
+    ConversationItemAddedEvent,
     ModelSettings,
     inference,
     llm,
@@ -45,6 +49,12 @@ from facts import (
     get_published_facts,
 )
 from persona import GREETINGS, VOICE_NOTES
+from transcript import (
+    Transcript,
+    cloud_run_post,
+    facts_version_number,
+    session_id_from_metadata,
+)
 
 # The SDK and plugins read their own keys from the environment, so .env goes there first.
 load_dotenv()
@@ -84,6 +94,63 @@ NO_FACTS_REPLY = (
     "Hi, I'm Lee's AI twin. Sorry, I can't answer questions right now because something's "
     "wrong on my end. Please try again later, or reach out to Lee directly."
 )
+
+
+# cloud-run sends the call's length limit in the dispatch metadata (I7). This is the fallback
+# when it's missing or out of range, and matches cloud-run's default.
+DEFAULT_MAX_SESSION_MINUTES = 6.0
+
+# The goodbye starts this long before the limit, so it's heard in full before the call ends.
+GOODBYE_LEAD_SECONDS = 20.0
+
+TIME_UP_REPLY = (
+    "That's all the time we have for this call. Thanks so much for talking with me, and goodbye!"
+)
+
+
+def _dispatch_metadata(metadata: str) -> dict:
+    try:
+        value = json.loads(metadata or "{}")
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _max_session_minutes(metadata: dict) -> float:
+    try:
+        value = float(metadata.get("max_session_minutes"))
+    except (ValueError, TypeError):
+        return DEFAULT_MAX_SESSION_MINUTES
+    return value if 1 <= value <= 60 else DEFAULT_MAX_SESSION_MINUTES
+
+
+# Each call's transcript, by job ID, for on_session_end to send the final batch.
+_transcripts: dict[str, Transcript] = {}
+
+
+async def _end_at_time_limit(
+    ctx: agents.JobContext,
+    session: AgentSession,
+    minutes: float,
+    before_end: Callable[[], Awaitable[None]],
+) -> None:
+    await asyncio.sleep(max(minutes * 60 - GOODBYE_LEAD_SECONDS, 0))
+    logger.info("time limit reached", extra={"max_session_minutes": minutes})
+    try:
+        # Queued behind any reply in progress; the timeout keeps the call from running over.
+        await asyncio.wait_for(
+            session.say(TIME_UP_REPLY, allow_interruptions=False), timeout=GOODBYE_LEAD_SECONDS
+        )
+    except (TimeoutError, RuntimeError, APIStatusError) as error:
+        # The call still ends below. RuntimeError covers a session that already closed.
+        logger.warning("goodbye failed", extra={"error": type(error).__name__})
+    # The final batch goes first. Deleting the room sends room_finished, and cloud-run refuses
+    # batches once that has ended the call.
+    await before_end()
+    # Not in a finally: a shutdown cancels this task, and that must not delete the room.
+    # Disconnects the visitor too, and LiveKit's room_finished webhook closes the session in
+    # cloud-run (A4).
+    await ctx.delete_room()
 
 
 def _is_safety_block(error: APIStatusError) -> bool:
@@ -128,6 +195,10 @@ class Assistant(Agent):
         # or one blocked turn would block every turn after it.
         self._blocked_message_ids: set[str] = set()
 
+    def is_blocked(self, message_id: str) -> bool:
+        """Marked as a violation in the transcript, so Lee sees why a call ended (A4)."""
+        return message_id in self._blocked_message_ids
+
     async def llm_node(
         self,
         chat_ctx: llm.ChatContext,
@@ -165,17 +236,43 @@ class Assistant(Agent):
 server = AgentServer()
 
 
-@server.rtc_session(agent_name=settings.livekit_agent_name)
+async def _send_final_transcript(ctx: agents.JobContext) -> None:
+    # Runs after the session closes, so every turn is in, and before the agent leaves the room,
+    # so the final batch reaches cloud-run ahead of room_finished. The SDK allows it 5 minutes.
+    transcript = _transcripts.pop(ctx.job.id, None)
+    if transcript is not None:
+        await transcript.finish()
+
+
+@server.rtc_session(
+    agent_name=settings.livekit_agent_name, on_session_end=_send_final_transcript
+)
 async def entrypoint(ctx: agents.JobContext) -> None:
     # Fetched per call, so a publish in admin reaches the next call with no deploy (ADR-21).
     facts: FactSet | None
     try:
         facts = await get_published_facts()
-        # The version only, never fact text (ADR-14). It goes into the transcript once built.
+        # The version only, never fact text (ADR-14). It's also sent with each transcript batch.
         logger.info("facts loaded", extra={"facts_version": facts.version})
     except NoFactsError as error:
         facts = None
         logger.error("no facts for this call", extra={"reason": str(error)})
+
+    metadata = _dispatch_metadata(ctx.job.metadata)
+    assistant = Assistant(facts)
+    transcript: Transcript | None = None
+    session_id = session_id_from_metadata(metadata)
+    post = cloud_run_post(session_id) if session_id else None
+    if post is None:
+        # Local runs: no CLOUD_RUN_URL, or a dispatch that didn't come from cloud-run.
+        logger.info("transcript not sent for this call")
+    else:
+        transcript = Transcript(
+            post=post,
+            facts_version=facts_version_number(facts.version if facts else None),
+            is_violation=assistant.is_blocked,
+        )
+        _transcripts[ctx.job.id] = transcript
 
     session = AgentSession(
         stt=inference.STT(model="assemblyai/universal-3-6-pro", language="en"),
@@ -200,6 +297,27 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         use_tts_aligned_transcript=True,
     )
 
+    if transcript is not None:
+
+        @session.on("conversation_item_added")
+        def _on_item(event: ConversationItemAddedEvent) -> None:
+            if isinstance(event.item, llm.ChatMessage):
+                transcript.add(event.item.id, event.item.role, event.item.text_content)
+
+    async def _finish_transcript() -> None:
+        if transcript is not None:
+            await transcript.finish()
+
+    # Started before the avatar and greeting, so time spent joining counts toward the limit.
+    time_limit = asyncio.create_task(
+        _end_at_time_limit(ctx, session, _max_session_minutes(metadata), _finish_transcript)
+    )
+
+    async def _cancel_time_limit() -> None:
+        time_limit.cancel()
+
+    ctx.add_shutdown_callback(_cancel_time_limit)
+
     avatar: tavus.AvatarSession | None = None
     if not ctx.is_fake_job():
         # No default face, for the same reason as the voice: without a face ID the plugin
@@ -216,7 +334,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     await session.start(
         room=ctx.room,
-        agent=Assistant(facts),
+        agent=assistant,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
                 # Voice isolation for one visitor on a laptop mic. It runs before VAD, STT and
