@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react'
 import { ApiError, visitorApi, visitorPreview, type Contact, type SessionGrant, type Terms } from '@/lib/api'
+import { takeInviteCode } from '@/lib/invite-link'
 import { MIC_PROBLEM_TEXT, precheckMic, requestMic, type MicProblem } from '@/lib/mic'
 import type { CallEnd } from './call-screen'
 import { ContactScreen } from './contact-screen'
@@ -90,6 +91,7 @@ export function VisitorApp() {
       return (
         <GateScreen
           initialError={step.error}
+          linkCode={takeInviteCode()}
           onVerified={(code, terms) => setStep({ name: 'terms', code, terms })}
         />
       )

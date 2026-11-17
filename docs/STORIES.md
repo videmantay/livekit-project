@@ -168,6 +168,16 @@ As an invited visitor, I can see Lee's real language level, so the avatar's spee
 - ⬜ Later: a Portuguese question with no prepared answer gets an English reply, or Spanish if I asked for Spanish
 - ⬜ The avatar never generates Portuguese
 
+### I12. My invite link takes me straight in
+
+As an invited visitor, I open the link in my invitation and land on the terms, without finding the page or pasting a code.
+
+- ⚠️ `/invite#invite=<code>` verifies the code and goes to the terms, using no session (built, not yet tried in a browser end to end)
+- ⚠️ The code is in the fragment only, and is removed from the address bar once read (ADR-3) (built, not yet tried in a browser end to end)
+- ⚠️ A bad or broken link shows the generic message and the paste box (U1) (built, not yet tried in a browser end to end)
+- ⚠️ The new-invite panel in `/admin` shows a ready-to-send email message, the link and the code, each copyable (A1) (built, not yet tried with a real Google sign-in)
+- ⬜ The CLI prints the link too
+
 ## Admin
 
 Lee, the only admin.

@@ -1,4 +1,4 @@
-import { useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,15 +8,43 @@ import { GENERIC_CODE_ERROR, RATE_LIMIT_ERROR } from './messages'
 
 export function GateScreen({
   initialError,
+  linkCode,
   onVerified,
 }: {
   initialError?: string
+  /** A code from an invite link, checked straight away. Checking it uses no session (I1). */
+  linkCode?: string
   onVerified: (code: string, terms: Terms) => void
 }) {
   const [code, setCode] = useState('')
   const [error, setError] = useState(initialError)
   const [busy, setBusy] = useState(false)
+  // A link is checked before the form shows, so a valid one goes straight to the terms.
+  const [checkingLink, setCheckingLink] = useState(Boolean(linkCode && !initialError))
   const inFlight = useRef(false)
+
+  async function verify(candidate: string) {
+    if (inFlight.current) return
+    inFlight.current = true
+    setBusy(true)
+    setError(undefined)
+    try {
+      onVerified(candidate, await visitorApi.verifyInvite(candidate))
+    } catch (err) {
+      // A bad link gets the same message as a bad code, and the paste box as a fallback (U1).
+      setError(err instanceof ApiError && err.status === 429 ? RATE_LIMIT_ERROR : GENERIC_CODE_ERROR)
+      setCheckingLink(false)
+    } finally {
+      inFlight.current = false
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (linkCode && !initialError) void verify(linkCode)
+    // Runs once per link. The inFlight guard covers StrictMode's second run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkCode])
 
   // Codes are case-sensitive and meant to be pasted, so only surrounding whitespace is removed (ADR-3).
   function onPaste(e: ClipboardEvent<HTMLInputElement>) {
@@ -27,24 +55,23 @@ export function GateScreen({
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     const trimmed = code.trim()
-    if (!trimmed || inFlight.current) return
-    inFlight.current = true
-    setBusy(true)
-    setError(undefined)
-    try {
-      onVerified(trimmed, await visitorApi.verifyInvite(trimmed))
-    } catch (err) {
-      setError(err instanceof ApiError && err.status === 429 ? RATE_LIMIT_ERROR : GENERIC_CODE_ERROR)
-    } finally {
-      inFlight.current = false
-      setBusy(false)
-    }
+    if (trimmed) await verify(trimmed)
+  }
+
+  if (checkingLink) {
+    return (
+      <VisitorPage>
+        <PageHeader eyebrow="By invitation" title="Talk to Lee's AI avatar">
+          <p role="status">Checking your invitation…</p>
+        </PageHeader>
+      </VisitorPage>
+    )
   }
 
   return (
     <VisitorPage>
       <PageHeader eyebrow="By invitation" title="Talk to Lee's AI avatar">
-        <p>Paste the access code from your invitation.</p>
+        <p>Open the link in your invitation, or paste its access code here.</p>
       </PageHeader>
 
       <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>

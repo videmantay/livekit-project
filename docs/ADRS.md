@@ -60,6 +60,8 @@ The UI adapts to the code, which replaces last session's suggestion to shorten i
 
 **Consequences:** Codes are meant to be pasted, not typed. Lost codes can't be recovered, so Lee issues a new one. Rate limiting is per instance, so max-instances must stay low.
 
+**Invite links (added 2026-11-17):** Lee sends a link, `/invite#invite=<code>`, with the code as a fallback in the same message. The code goes only in the URL fragment, never the query string, because browsers don't send the fragment to a server. That keeps it out of Hosting logs and the Referer header (ADR-14). The page reads the code once, then removes it from the address bar. Opening a link only verifies the code, which uses no session (I1), so link-preview bots can't spend one. The terms and consent still come first (ADR-4, ADR-15). The site sends `Referrer-Policy: no-referrer`. A bad link gets the same generic message as a bad code (U1), and the paste box stays.
+
 ## ADR-4: Consent comes before the mic and the token
 
 **Status:** Accepted

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { adminApi, type Invite } from '@/lib/admin-api'
+import { inviteLink, inviteMessage } from '@/lib/invite-link'
 import { ConfirmButton } from './confirm-button'
 import { errorText } from './errors'
 import { formatDate } from './format'
@@ -18,7 +19,7 @@ function status(invite: Invite): { text: string; variant: 'secondary' | 'outline
 
 export function AccessCodesPage() {
   const [invites, setInvites] = useState<Invite[]>()
-  const [newCode, setNewCode] = useState<{ label: string; code: string }>()
+  const [newCode, setNewCode] = useState<{ invite: Invite; code: string }>()
   const [loadError, setLoadError] = useState<string>()
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export function AccessCodesPage() {
       <CreateInviteForm
         onCreated={(invite, code) => {
           setInvites((prev) => [invite, ...(prev ?? [])])
-          setNewCode({ label: invite.label, code })
+          setNewCode({ invite, code })
         }}
       />
 
@@ -156,27 +157,70 @@ function CreateInviteForm({ onCreated }: { onCreated: (invite: Invite, code: str
   )
 }
 
-function NewCodePanel({ label, code, onDone }: { label: string; code: string; onDone: () => void }) {
-  const [copied, setCopied] = useState(false)
+type Copied = 'message' | 'link' | 'code'
+
+// Shown once, straight after creating an invite. The code can't be shown again (A1).
+function NewCodePanel({ invite, code, onDone }: { invite: Invite; code: string; onDone: () => void }) {
+  const [copied, setCopied] = useState<Copied>()
+  const link = inviteLink(code)
+  const message = inviteMessage({
+    link,
+    code,
+    sessionLimit: invite.sessionLimit,
+    expiresOn: formatDate(invite.expiresAt),
+  })
+
+  async function copy(what: Copied, text: string) {
+    await navigator.clipboard.writeText(text)
+    setCopied(what)
+  }
+
   return (
     <Card className="border-foreground/30">
       <CardHeader>
-        <CardTitle className="text-lg">Code for “{label}”</CardTitle>
+        <CardTitle className="text-lg">Invite for “{invite.label}”</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-sm">Copy it now. It's shown only once and can't be recovered.</p>
-        <code className="rounded-lg bg-muted px-3 py-2 font-mono break-all">{code}</code>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await navigator.clipboard.writeText(code)
-              setCopied(true)
-            }}
-          >
-            {copied ? 'Copied' : 'Copy code'}
+      <CardContent className="flex flex-col gap-4">
+        <p className="text-sm">
+          Copy it now. It's shown only once and can't be recovered. Send the link; the code is the
+          fallback if an email client breaks the link.
+        </p>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="invite-message">Email message</Label>
+          <textarea
+            id="invite-message"
+            readOnly
+            value={message}
+            rows={14}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full resize-y rounded-lg border bg-muted px-3 py-2 text-sm leading-relaxed"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Link</span>
+          <code className="rounded-lg bg-muted px-3 py-2 font-mono text-sm break-all select-all">{link}</code>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Code</span>
+          <code className="rounded-lg bg-muted px-3 py-2 font-mono text-sm break-all select-all">{code}</code>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => copy('message', message)}>
+            {copied === 'message' ? 'Copied' : 'Copy message'}
           </Button>
-          <Button onClick={onDone}>Done, hide it</Button>
+          <Button variant="outline" onClick={() => copy('link', link)}>
+            {copied === 'link' ? 'Copied' : 'Copy link'}
+          </Button>
+          <Button variant="outline" onClick={() => copy('code', code)}>
+            {copied === 'code' ? 'Copied' : 'Copy code'}
+          </Button>
+          <Button variant="secondary" onClick={onDone}>
+            Done, hide it
+          </Button>
         </div>
       </CardContent>
     </Card>
