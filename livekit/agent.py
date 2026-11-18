@@ -2,7 +2,9 @@
 
 Pipeline: LiveKit Inference STT -> Gemini 3.5 Flash (Google plugin, own key)
 -> ElevenLabs TTS (plugin, own key) -> Tavus avatar, which lip-syncs to that
-audio. Lee's published facts go into the prompt (facts.py), fetched from cloud-run at each call
+audio. If ElevenLabs fails, a stock LiveKit Inference voice speaks until it recovers; if Tavus
+fails, the call goes on with voice only. Either way the call screen tells the visitor
+(service_notices.py). Lee's published facts go into the prompt (facts.py), fetched from cloud-run at each call
 start, or read from the local seed file when CLOUD_RUN_URL is unset (ADR-21). The transcript
 goes back to cloud-run in batches (transcript.py, A4).
 
@@ -23,11 +25,12 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 
 import aiohttp
 from dotenv import load_dotenv
-from livekit import agents
+from livekit import agents, rtc
 from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
+    APIError,
     APIStatusError,
     ConversationItemAddedEvent,
     ModelSettings,
@@ -37,9 +40,11 @@ from livekit.agents import (
     llm,
     room_io,
 )
+from livekit.agents import tts as agent_tts
 from livekit.agents.voice.io import TimedString
 from livekit.plugins import ai_coustics, elevenlabs, google, silero, tavus
 
+import service_notices
 from config import AgentSettings
 from delivery import DELIVERY_NOTES, allow_listed_tags_only, without_tags
 from facts import (
@@ -74,8 +79,13 @@ ELEVENLABS_MODEL = "eleven_v4_turbo"
 # Same base URL the Tavus plugin uses, for ending the conversation it started.
 TAVUS_API_URL = "https://tavusapi.com/v2"
 
-# How long the greeting waits for the avatar's video before the call fails.
+# How long the call waits for the avatar's video before going on with voice only.
 AVATAR_JOIN_TIMEOUT_SECONDS = 30.0
+
+# No retries on ElevenLabs before the backup voice takes over: each failed attempt is about 10
+# seconds of silence for the visitor. The adapter keeps probing ElevenLabs in the background
+# and goes back to it as soon as it answers.
+TTS_RETRIES_BEFORE_BACKUP = 0
 
 # Strictest level on every adjustable Gemini filter. Unset categories default to off on Gemini
 # 2.5 and later. Gemini has no profanity or child-safe filter, so the prompt covers those.
@@ -171,6 +181,53 @@ async def _end_tavus_conversation(avatar: tavus.AvatarSession | None) -> None:
                 logger.warning("tavus end failed", extra={"status": response.status})
     except (aiohttp.ClientError, TimeoutError) as error:
         logger.warning("tavus end failed", extra={"error": type(error).__name__})
+
+
+async def _set_notice(room: rtc.Room, key: str, value: str) -> None:
+    # Best effort: the notice only explains the call to the visitor, so failing to send it
+    # must never end the call.
+    try:
+        await room.local_participant.set_attributes({key: value})
+    except Exception as error:  # noqa: BLE001
+        logger.warning("notice not sent", extra={"notice": key, "error": type(error).__name__})
+
+
+async def _start_avatar(
+    ctx: agents.JobContext, session: AgentSession
+) -> tavus.AvatarSession | None:
+    """The avatar, joined and showing video, or None when Tavus failed and the call goes on
+    with voice only (I7). Runs before session.start, so on failure the session publishes its
+    audio to the room as usual instead of sending it to an avatar that isn't there."""
+    # No default face, for the same reason as the voice: without a face ID the plugin shows a
+    # stock Tavus face. The stock PAL is used: echo mode, so Tavus only moves the face to our
+    # audio and never hears the visitor or writes replies.
+    avatar = tavus.AvatarSession(face_id=settings.tavus_face_id)
+    # The plugin never ends the Tavus conversation, so every call would hold a slot until Tavus
+    # times it out, and the account soon hits its concurrent-conversation cap. Registered before
+    # start, so a start that fails partway still cleans up.
+    ctx.add_shutdown_callback(lambda: _end_tavus_conversation(avatar))
+    try:
+        # Sends agent audio to the avatar instead of the room.
+        await avatar.start(session, room=ctx.room)
+        # The greeting waits for the face, so the visitor sees who is talking.
+        await avatar.wait_for_join(timeout=AVATAR_JOIN_TIMEOUT_SECONDS)
+        return avatar
+    except (APIError, tavus.TavusException, TimeoutError) as error:
+        # The type and status only: the body could echo request details (ADR-14).
+        logger.warning(
+            "avatar unavailable, voice only",
+            extra={
+                "error": type(error).__name__,
+                "status": getattr(error, "status_code", None),
+            },
+        )
+    # Free the Tavus slot now, not at the end of the call, and take the avatar out of the room.
+    await _end_tavus_conversation(avatar)
+    avatar.conversation_id = None
+    await avatar.aclose()
+    # Back to the session's own room audio output, which session.start creates when unset.
+    session.output.audio = None
+    return None
 
 
 class Assistant(Agent):
@@ -292,11 +349,40 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "en": settings.elevenlabs_voice_id,
         "es": settings.elevenlabs_spanish_voice_id,
     }
-    tts = elevenlabs.TTS(voice_id=voices[start], model=ELEVENLABS_MODEL, language=start)
+    lee_voice = elevenlabs.TTS(voice_id=voices[start], model=ELEVENLABS_MODEL, language=start)
+    backup_voice = inference.TTS(
+        model=settings.backup_tts_model,
+        voice=settings.backup_tts_voice,
+        language=start,
+        # Word timings, so captions stay in step with the backup voice too. Cartesia only.
+        extra_kwargs=(
+            {"add_timestamps": True} if settings.backup_tts_model.startswith("cartesia/") else {}
+        ),
+    )
+    # Lee's voice first. When ElevenLabs fails, the backup voice speaks until it recovers.
+    tts = agent_tts.FallbackAdapter(
+        [lee_voice, backup_voice], max_retry_per_tts=TTS_RETRIES_BEFORE_BACKUP
+    )
 
     def switch_voice(language: Language) -> None:
         # The plugin drops its open connection, so the next reply uses the new voice.
-        tts.update_options(voice_id=voices[language], language=language)
+        lee_voice.update_options(voice_id=voices[language], language=language)
+        backup_voice.update_options(language=language)
+
+    notice_tasks: set[asyncio.Task[None]] = set()
+
+    @tts.on("tts_availability_changed")
+    def _on_voice_availability(event: agent_tts.AvailabilityChangedEvent) -> None:
+        if event.tts is not lee_voice:
+            return
+        logger.warning(
+            "lee voice recovered" if event.available else "lee voice failed, backup voice on"
+        )
+        task = asyncio.create_task(
+            _set_notice(ctx.room, service_notices.VOICE, service_notices.voice_notice(event.available))
+        )
+        notice_tasks.add(task)
+        task.add_done_callback(notice_tasks.discard)
 
     assistant = Assistant(facts, start, switch_voice)
     transcript: Transcript | None = None
@@ -327,7 +413,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             temperature=0,
             safety_settings=GEMINI_SAFETY_SETTINGS,
         ),
-        # Lee's English or Spanish voice, switched by set_language (ADR-20).
+        # Lee's English or Spanish voice, switched by set_language (ADR-20), with the backup
+        # voice behind it.
         tts=tts,
         # The defaults, plus the allowlist that drops any tag not in delivery.ALLOWED_TAGS.
         tts_text_transforms=["filter_markdown", "filter_emoji", allow_listed_tags_only],
@@ -364,19 +451,13 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     ctx.add_shutdown_callback(_cancel_time_limit)
 
-    avatar: tavus.AvatarSession | None = None
+    # Console runs have no room, so no avatar.
     if not ctx.is_fake_job():
-        # No default face, for the same reason as the voice: without a face ID the plugin
-        # shows a stock Tavus face. Read here, not at import, so console runs without it.
-        # The stock PAL is used: echo mode, so Tavus only moves the face to our audio and
-        # never hears the visitor or writes replies.
-        avatar = tavus.AvatarSession(face_id=settings.tavus_face_id)
-        # The plugin never ends the Tavus conversation, so every call would hold a slot until
-        # Tavus times it out, and the account soon hits its concurrent-conversation cap.
-        # Registered before start, so a start that fails partway still cleans up.
-        ctx.add_shutdown_callback(lambda: _end_tavus_conversation(avatar))
-        # Before session.start, so agent audio goes to the avatar and not straight to the room.
-        await avatar.start(session, room=ctx.room)
+        # The avatar waits for the room, and the notice goes out on this participant.
+        await ctx.connect()
+        # Before session.start, so agent audio goes to the avatar, or to the room if it failed.
+        if await _start_avatar(ctx, session) is None:
+            await _set_notice(ctx.room, service_notices.VIDEO, service_notices.VIDEO_UNAVAILABLE)
 
     await session.start(
         room=ctx.room,
@@ -391,10 +472,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             ),
         ),
     )
-    if avatar is not None:
-        # The greeting waits for the face, so the visitor sees who is talking. Raises after the
-        # timeout, which ends the call.
-        await avatar.wait_for_join(timeout=AVATAR_JOIN_TIMEOUT_SECONDS)
     # Lee's own words, spoken as written, and not interruptible so the AI disclosure is always
     # heard in full (ADR-8, I6).
     if facts is None:

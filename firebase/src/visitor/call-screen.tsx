@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { SessionGrant } from '@/lib/api'
 import { END_WARNING_MINUTES, MAX_SESSION_MINUTES } from '@/lib/config'
 import { VisitorPage } from './layout'
+import { SERVICE_NOTICES } from './messages'
 
 export type CallEnd = 'user' | 'time-limit' | 'connection-lost'
 
@@ -34,6 +35,18 @@ type Turn = { id: string; speaker: string; text: string }
 const AGENT_LABEL = 'Lee (AI)'
 
 const LIMIT_SECONDS = MAX_SESSION_MINUTES * 60
+
+// Set by the agent on its own participant when a provider fails partway (I7). The keys and
+// values must match livekit/service_notices.py. Only fixed values arrive, never error text.
+const VIDEO_NOTICE = 'notice.video'
+const VOICE_NOTICE = 'notice.voice'
+
+function serviceNotices(attributes: Record<string, string> | undefined): string[] {
+  const notices: string[] = []
+  if (attributes?.[VIDEO_NOTICE] === 'unavailable') notices.push(SERVICE_NOTICES.videoUnavailable)
+  if (attributes?.[VOICE_NOTICE] === 'backup') notices.push(SERVICE_NOTICES.backupVoice)
+  return notices
+}
 
 function formatClock(seconds: number) {
   const m = Math.floor(seconds / 60)
@@ -95,7 +108,9 @@ function LiveCall({ stream, onEnd }: { stream: MediaStream; onEnd: (end: CallEnd
   const room = useRoomContext()
   const connection = useConnectionState()
   const { localParticipant } = useLocalParticipant()
-  const { videoTrack } = useVoiceAssistant()
+  const { videoTrack, agentAttributes } = useVoiceAssistant()
+  const notices = serviceNotices(agentAttributes)
+  const voiceOnly = agentAttributes?.[VIDEO_NOTICE] === 'unavailable'
   const transcriptions = useTranscriptions()
   const [muted, setMuted] = useState(false)
   const mutedRef = useRef(false)
@@ -149,7 +164,7 @@ function LiveCall({ stream, onEnd }: { stream: MediaStream; onEnd: (end: CallEnd
   let status: string | undefined
   if (connection === ConnectionState.Connecting) status = 'Connecting…'
   else if (connection === ConnectionState.Reconnecting) status = 'Connection unsteady. Reconnecting…'
-  else if (!videoTrack) status = "Waiting for Lee's avatar to join…"
+  else if (!videoTrack && !voiceOnly) status = "Waiting for Lee's avatar to join…"
 
   return (
     <>
@@ -159,10 +174,13 @@ function LiveCall({ stream, onEnd }: { stream: MediaStream; onEnd: (end: CallEnd
           videoTrack ? (
             <VideoTrack trackRef={videoTrack} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">{status}</div>
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              {voiceOnly && !status ? 'Voice only' : status}
+            </div>
           )
         }
-        status={videoTrack ? status : undefined}
+        status={videoTrack || voiceOnly ? status : undefined}
+        notices={notices}
         audioPrompt={
           // Shown only if the browser blocked autoplay.
           <StartAudio label="Turn on the avatar's sound" className="rounded-md border px-3 py-1.5 text-sm" />
@@ -218,6 +236,7 @@ function PreviewCall({
 function CallLayout({
   video,
   status,
+  notices = [],
   audioPrompt,
   transcript,
   muted,
@@ -226,6 +245,8 @@ function CallLayout({
 }: {
   video: ReactNode
   status?: string
+  /** Provider problems the visitor should know about, from the agent. */
+  notices?: string[]
   audioPrompt?: ReactNode
   transcript: Turn[]
   muted: boolean
@@ -279,6 +300,12 @@ function CallLayout({
               {formatClock(secondsLeft)} left
             </p>
           </div>
+
+          {notices.map((notice) => (
+            <p key={notice} role="status" className="rounded-lg border bg-muted px-4 py-3 text-sm">
+              {notice}
+            </p>
+          ))}
 
           {warning && (
             <p role="alert" className="rounded-lg border border-foreground/20 bg-muted px-4 py-3">
