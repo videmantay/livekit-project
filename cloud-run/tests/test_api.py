@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -7,7 +8,7 @@ import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from google.api_core.exceptions import Aborted
+from google.api_core.exceptions import Aborted, GoogleAPICallError
 from google.cloud.firestore_v1.document import DocumentReference
 from google.cloud.firestore_v1.transaction import Transaction
 from pydantic import ValidationError
@@ -295,12 +296,24 @@ def test_exhausted_retries_return_503_and_use_no_session(
     code, invite_id = make_invite()
     target = (Transaction, "_commit") if abort_on == "commit" else (DocumentReference, "get")
 
+    begun = []
+
     def always_abort(*args, **kwargs):
+        if abort_on == "commit":
+            begun.append(args[0].id)
         raise Aborted("contention")
 
     monkeypatch.setattr(*target, always_abort)
     response = client.post("/sessions", json=session_body(code))
     monkeypatch.undo()
+    # A real abort ends each attempt on the server. The fake never reached it, so end them
+    # here, or the emulator keeps their locks on recent sessions and stalls later tests.
+    for transaction_id in begun:
+        # The library already rolled back the last one, so the server may not know it.
+        with contextlib.suppress(GoogleAPICallError):
+            db._firestore_api.rollback(
+                request={"database": db._database_string, "transaction": transaction_id}
+            )
 
     assert response.status_code == 503
     assert response.headers["retry-after"] == "1"

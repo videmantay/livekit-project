@@ -42,6 +42,18 @@ async def fetch_published_facts(base_url: str, secret: bytes) -> dict | None:
         return await resp.json()
 
 
+async def release_session(base_url: str, secret: bytes, session_id: str, timeout: float) -> int:
+    """Gives a failed call's session back to its invite (I7, I9). Returns the HTTP status:
+    200 whether or not it was already released. Raises on network errors only."""
+    path = f"/internal/sessions/{session_id}/release"
+    headers = signed_headers(secret, "POST", path)
+    async with (
+        aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as http,
+        http.post(base_url.rstrip("/") + path, headers=headers) as resp,
+    ):
+        return resp.status
+
+
 async def post_transcript_batch(
     base_url: str, secret: bytes, session_id: str, batch: dict, timeout: float
 ) -> int:
