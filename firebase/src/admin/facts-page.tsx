@@ -9,13 +9,14 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   adminApi,
   FACT_SECTIONS,
+  factContent,
   type Fact,
   type FactSection,
   type FactsState,
   type Story,
 } from '@/lib/admin-api'
 import { errorText } from './errors'
-import { formatDateTime } from './format'
+import { formatDate, formatDateTime } from './format'
 
 type Change = 'new' | 'edited' | 'published'
 
@@ -30,7 +31,73 @@ const STORY_PARTS = [
   ['result', 'Result', 'What changed. Use a real number only if Lee confirmed it'],
 ] as const
 
-const sameFact = ({ id: _a, ...a }: Fact, { id: _b, ...b }: Fact) => JSON.stringify(a) === JSON.stringify(b)
+const sameFact = (a: Fact, b: Fact) => JSON.stringify(factContent(a)) === JSON.stringify(factContent(b))
+
+const DAY = 86_400_000
+
+type Filters = {
+  query: string
+  section: FactSection | 'all'
+  status: 'all' | 'draft' | 'published'
+  updated: 'any' | '7' | '30' | 'stale'
+  sort: 'section' | 'updated-desc' | 'updated-asc' | 'created-desc'
+}
+
+const NO_FILTERS: Filters = { query: '', section: 'all', status: 'all', updated: 'any', sort: 'section' }
+
+const STATUS_LABELS = { all: 'Any status', draft: 'Drafts only', published: 'Published only' } as const
+
+const UPDATED_LABELS = {
+  any: 'Updated any time',
+  '7': 'Updated in the past 7 days',
+  '30': 'Updated in the past 30 days',
+  stale: 'Not updated in 90+ days',
+} as const
+
+const SORT_LABELS = {
+  section: 'Sort by section',
+  'updated-desc': 'Recently updated first',
+  'updated-asc': 'Least recently updated first',
+  'created-desc': 'Recently added first',
+} as const
+
+const isFiltering = (f: Filters) => JSON.stringify(f) !== JSON.stringify(NO_FILTERS)
+
+const time = (iso?: string) => (iso ? Date.parse(iso) : 0)
+
+/** Every field Lee wrote, stories included, lowercased for a plain substring search. */
+const searchText = (fact: Fact) =>
+  [fact.topic, fact.level, fact.verified, fact.limits, ...fact.stories.flatMap((s) => Object.values(s))]
+    .join('\n')
+    .toLowerCase()
+
+/** Every word in the search must appear somewhere in the fact. */
+function matchesText(fact: Fact, f: Filters) {
+  if (f.section !== 'all' && fact.section !== f.section) return false
+  const text = searchText(fact)
+  return f.query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((w) => text.includes(w))
+}
+
+function matches(fact: Fact, change: Change, f: Filters, now: number) {
+  if (!matchesText(fact, f)) return false
+  if (f.status === 'draft' && change === 'published') return false
+  if (f.status === 'published' && change !== 'published') return false
+  if (f.updated === 'any') return true
+  const age = now - time(fact.updatedAt)
+  return f.updated === 'stale' ? age >= 90 * DAY : age <= Number(f.updated) * DAY
+}
+
+function sortFacts(facts: Fact[], sort: Filters['sort']) {
+  // The server returns section order, and sort() is stable, so ties keep it.
+  if (sort === 'section') return facts
+  const key = sort === 'created-desc' ? 'createdAt' : 'updatedAt'
+  const dir = sort === 'updated-asc' ? 1 : -1
+  return [...facts].sort((a, b) => dir * (time(a[key]) - time(b[key])))
+}
 
 /** `seed` is a declined question from "Add as fact". Remount with a new key to apply another. */
 export function FactsPage({ seed }: { seed?: string }) {
@@ -38,6 +105,9 @@ export function FactsPage({ seed }: { seed?: string }) {
   const [editing, setEditing] = useState<Fact | undefined>(seed ? { ...EMPTY, topic: seed } : undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
+  const [filters, setFilters] = useState(NO_FILTERS)
+  // Fixed when the page opens. Day-sized filters don't need a live clock.
+  const [now] = useState(Date.now)
 
   useEffect(() => {
     adminApi.getFacts().then(setState, (e) => setError(errorText(e)))
@@ -54,6 +124,14 @@ export function FactsPage({ seed }: { seed?: string }) {
   }
   const removed = latest?.facts.filter((f) => !state.working.some((w) => w.id === f.id)) ?? []
   const pending = state.working.filter((f) => changeOf(f) !== 'published').length + removed.length
+  const shown = sortFacts(
+    state.working.filter((f) => matches(f, changeOf(f), filters, now)),
+    filters.sort,
+  )
+  // A pending removal is a draft with no date, so the date filter hides it.
+  const shownRemoved = removed.filter(
+    (f) => filters.status !== 'published' && filters.updated === 'any' && matchesText(f, filters),
+  )
 
   async function run(action: () => Promise<FactsState>): Promise<boolean> {
     setBusy(true)
@@ -109,17 +187,43 @@ export function FactsPage({ seed }: { seed?: string }) {
       )}
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Facts</h2>
-        {state.working.map((fact) => {
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-xl font-semibold">Facts</h2>
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            {isFiltering(filters)
+              ? `Showing ${shown.length} of ${state.working.length}`
+              : `${state.working.length} ${state.working.length === 1 ? 'fact' : 'facts'}`}
+          </p>
+        </div>
+        <FactFilters filters={filters} onChange={setFilters} />
+        {shown.length === 0 && state.working.length > 0 && (
+          <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+            No facts match these filters.{' '}
+            <Button variant="link" className="h-auto p-0" onClick={() => setFilters(NO_FILTERS)}>
+              Clear filters
+            </Button>
+          </p>
+        )}
+        {shown.map((fact) => {
           const change = changeOf(fact)
           return (
             <Card key={fact.id} size="sm">
               <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle className="text-base">
-                    {fact.topic}
-                    <span className="font-normal text-muted-foreground"> · {FACT_SECTIONS[fact.section]}</span>
-                  </CardTitle>
+                  <div className="flex flex-col gap-0.5">
+                    <CardTitle className="text-base">
+                      {fact.topic}
+                      <span className="font-normal text-muted-foreground"> · {FACT_SECTIONS[fact.section]}</span>
+                    </CardTitle>
+                    {fact.updatedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Updated {formatDate(fact.updatedAt)}
+                        {fact.createdAt && formatDate(fact.createdAt) !== formatDate(fact.updatedAt) && (
+                          <> · Added {formatDate(fact.createdAt)}</>
+                        )}
+                      </p>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     {change === 'published' ? (
                       <Badge variant="secondary">Published</Badge>
@@ -160,7 +264,7 @@ export function FactsPage({ seed }: { seed?: string }) {
             </Card>
           )
         })}
-        {removed.map((fact) => (
+        {shownRemoved.map((fact) => (
           <p key={fact.id} className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
             <span className="line-through">{fact.topic}</span> will be removed when you publish.
           </p>
@@ -192,6 +296,70 @@ export function FactsPage({ seed }: { seed?: string }) {
         </p>
       </section>
     </div>
+  )
+}
+
+function FactFilters({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
+  const set =
+    <K extends keyof Filters>(key: K) =>
+    (value: Filters[K]) =>
+      onChange({ ...filters, [key]: value })
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <Label htmlFor="fact-search" className="sr-only">
+        Search facts
+      </Label>
+      <Input
+        id="fact-search"
+        type="search"
+        value={filters.query}
+        onChange={(e) => set('query')(e.target.value)}
+        placeholder="Search topics, verified text, limits and stories"
+      />
+      <div className="flex flex-wrap gap-2">
+        <FilterSelect
+          label="Section"
+          value={filters.section}
+          onChange={set('section')}
+          options={{ all: 'All sections', ...FACT_SECTIONS }}
+        />
+        <FilterSelect label="Status" value={filters.status} onChange={set('status')} options={STATUS_LABELS} />
+        <FilterSelect label="Updated" value={filters.updated} onChange={set('updated')} options={UPDATED_LABELS} />
+        <FilterSelect label="Sort" value={filters.sort} onChange={set('sort')} options={SORT_LABELS} />
+        {isFiltering(filters) && (
+          <Button variant="ghost" onClick={() => onChange(NO_FILTERS)}>
+            Clear
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function FilterSelect<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: T
+  onChange: (value: T) => void
+  options: Record<T, string>
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as T)}>
+      <SelectTrigger aria-label={label} className="w-full sm:w-auto">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {(Object.entries(options) as [T, string][]).map(([key, text]) => (
+          <SelectItem key={key} value={key}>
+            {text}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 

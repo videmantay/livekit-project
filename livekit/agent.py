@@ -27,11 +27,9 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
-    APIError,
     APIStatusError,
     ConversationItemAddedEvent,
     ModelSettings,
-    SessionConnectOptions,
     inference,
     llm,
     room_io,
@@ -51,8 +49,7 @@ from facts import (
     get_published_facts,
 )
 from log_privacy import drop_pii_from_logs
-from pacing import LLM_CONN_OPTIONS, HoldingLine, ReplyTimeout, has_words, paced
-from persona import GREETINGS, STILL_THINKING_LINES, THINKING_LINES, VOICE_NOTES
+from persona import GREETINGS, VOICE_NOTES
 from transcript import (
     Transcript,
     cloud_run_post,
@@ -92,15 +89,6 @@ GEMINI_SAFETY_SETTINGS = [
 
 # Spoken in place of a reply Gemini blocked, once per blocked turn.
 BLOCKED_REPLY = "That's not something I can talk about, but I'm happy to tell you about Lee's work."
-
-# When the model has said nothing yet: a holding line at each stage, then the reply is given
-# up on (pacing.py). The SDK's own retries fit inside the limit, below.
-THINKING_STAGES = ((2.0, THINKING_LINES), (6.5, STILL_THINKING_LINES))
-REPLY_LIMIT_SECONDS = 12.0
-# LLM_CONN_OPTIONS (pacing.py) sets Gemini's deadline and retries.
-
-# Spoken when the model failed or gave nothing, instead of leaving the visitor in silence.
-TROUBLE_REPLY = "Sorry, I lost my train of thought there. Could you ask me that again?"
 
 # Spoken when there are no facts to answer from, then the call ends (ADR-21, A8).
 NO_FACTS_REPLY = (
@@ -225,36 +213,18 @@ class Assistant(Agent):
 
         replied = False
         try:
-            async for chunk in paced(
-                Agent.default.llm_node(self, chat_ctx, tools, model_settings),
-                THINKING_STAGES,
-                REPLY_LIMIT_SECONDS,
-            ):
-                replied = replied or (not isinstance(chunk, HoldingLine) and has_words(chunk))
+            async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+                replied = True
                 yield chunk
         except APIStatusError as error:
             if not _is_safety_block(error):
-                logger.warning("llm failed", extra={"status": error.status_code})
-                if not replied:
-                    yield TROUBLE_REPLY
-                return
+                raise
             user_messages = [m for m in chat_ctx.messages() if m.role == "user"]
             if user_messages:
                 self._blocked_message_ids.add(user_messages[-1].id)
             # A reply blocked partway has already been spoken up to the block; don't add to it.
             if not replied:
                 yield BLOCKED_REPLY
-            return
-        except (ReplyTimeout, APIError) as error:
-            # The error type only: messages can echo the request (ADR-14).
-            logger.warning("llm failed", extra={"error": type(error).__name__})
-            if not replied:
-                yield TROUBLE_REPLY
-            return
-        if not replied:
-            # Gemini sometimes ends a turn with no words at all, which would be silence.
-            logger.warning("llm reply was empty")
-            yield TROUBLE_REPLY
 
     async def transcription_node(
         self, text: AsyncIterable[str | TimedString], model_settings: ModelSettings
@@ -328,7 +298,6 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         vad=silero.VAD.load(),
         turn_detection=MultilingualModel(),
         use_tts_aligned_transcript=True,
-        conn_options=SessionConnectOptions(llm_conn_options=LLM_CONN_OPTIONS),
     )
 
     if transcript is not None:

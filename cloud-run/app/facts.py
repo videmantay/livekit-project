@@ -2,6 +2,7 @@
 
 Firestore layout:
 - `facts/{id}`: the working set, which is what admin edits. Anything not yet published is a draft.
+  Each has `created_at` and `updated_at`, which admin filters on. Snapshots leave them out.
 - `fact_versions/{number}`: a published snapshot of the whole working set.
 - `fact_meta/current`: `{"version": n}`, the live version.
 
@@ -80,13 +81,26 @@ def _sort_key(data: dict) -> tuple:
     return (SECTIONS.index(section) if section in SECTIONS else len(SECTIONS), data["created_at"])
 
 
+def _sorted(snapshots) -> list[tuple[str, dict]]:
+    return sorted(((s.id, s.to_dict()) for s in snapshots), key=lambda pair: _sort_key(pair[1]))
+
+
 def _working(snapshots) -> list[dict]:
-    docs = sorted(((s.id, s.to_dict()) for s in snapshots), key=lambda pair: _sort_key(pair[1]))
-    return [_public(doc_id, data) for doc_id, data in docs]
+    """The facts alone, as published snapshots store them. No dates, so the agent never sees any."""
+    return [_public(doc_id, data) for doc_id, data in _sorted(snapshots)]
 
 
 def list_working(db: firestore.Client) -> list[dict]:
-    return _working(_facts(db).stream())
+    """The working set for admin, with dates to filter and sort on. Facts saved before
+    `updated_at` existed fall back to `created_at`."""
+    return [
+        {
+            **_public(doc_id, data),
+            "createdAt": data["created_at"].isoformat(),
+            "updatedAt": data.get("updated_at", data["created_at"]).isoformat(),
+        }
+        for doc_id, data in _sorted(_facts(db).stream())
+    ]
 
 
 def list_versions(db: firestore.Client) -> list[dict]:
@@ -102,7 +116,8 @@ def facts_state(db: firestore.Client) -> dict:
 
 def create_fact(db: firestore.Client, fact: FactInput) -> str:
     ref = _facts(db).document()
-    ref.set({**fact.model_dump(), "created_at": datetime.now(UTC)})
+    now = datetime.now(UTC)
+    ref.set({**fact.model_dump(), "created_at": now, "updated_at": now})
     return ref.id
 
 
@@ -110,7 +125,8 @@ def update_fact(db: firestore.Client, fact_id: str, fact: FactInput) -> bool:
     ref = _facts(db).document(fact_id)
     if not ref.get().exists:
         return False
-    ref.update(fact.model_dump())
+    # Saving counts as Lee re-checking the fact, so it moves updated_at even when nothing changed.
+    ref.update({**fact.model_dump(), "updated_at": datetime.now(UTC)})
     return True
 
 
@@ -135,13 +151,22 @@ def _publish(transaction, db: firestore.Client, restore_number: int | None) -> i
         facts = _working(working)
     else:
         # Rolling back replaces the working set, so unpublished drafts are discarded.
+        current = {doc.id: doc.to_dict() for doc in working}
         for doc in working:
             transaction.delete(doc.reference)
         start = datetime.now(UTC)
         for i, fact in enumerate(restored):
             data = {key: fact[key] for key in FACT_FIELDS}
-            # Spaced created_at keeps the restored order.
+            before = current.get(fact["id"])
+            # A fact that was removed comes back as new. Spaced created_at keeps the restored order.
             data["created_at"] = start + timedelta(microseconds=i)
+            data["updated_at"] = start
+            if before:
+                # A fact still in the working set keeps its place and its added date, and keeps
+                # its updated date unless the rollback changes it.
+                data["created_at"] = before["created_at"]
+                if all(before.get(key) == data[key] for key in FACT_FIELDS):
+                    data["updated_at"] = before.get("updated_at", before["created_at"])
             transaction.set(_facts(db).document(fact["id"]), data)
         facts = restored
 

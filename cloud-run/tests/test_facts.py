@@ -167,6 +167,37 @@ def test_facts_are_ordered_by_section(client):
     assert [f["topic"] for f in state["working"]] == ["A", "B"]
 
 
+def test_working_facts_carry_dates_but_the_agent_never_sees_them(client):
+    created = client.post("/admin/facts", json=FACT, headers=ADMIN).json()["working"][0]
+    assert created["createdAt"] == created["updatedAt"]
+
+    client.post("/admin/facts/publish", headers=ADMIN)
+    version = client.get("/admin/facts", headers=ADMIN).json()["versions"][0]
+    assert "createdAt" not in version["facts"][0]
+    assert "createdAt" not in json.dumps(agent_facts(client).json())
+
+    edited = client.put(
+        f"/admin/facts/{created['id']}", json={**FACT, "level": "Staff"}, headers=ADMIN
+    ).json()["working"][0]
+    assert edited["createdAt"] == created["createdAt"]
+    assert edited["updatedAt"] > created["updatedAt"]
+
+
+def test_rollback_keeps_dates_of_unchanged_facts(client):
+    first = client.post("/admin/facts", json=FACT, headers=ADMIN).json()["working"][0]
+    client.post("/admin/facts/publish", headers=ADMIN)
+    second = {**FACT, "topic": "Second"}
+    client.post("/admin/facts", json=second, headers=ADMIN)
+    client.post("/admin/facts/publish", headers=ADMIN)
+
+    working = client.post("/admin/facts/rollback", json={"version": 1}, headers=ADMIN).json()[
+        "working"
+    ]
+    assert [(f["createdAt"], f["updatedAt"]) for f in working] == [
+        (first["createdAt"], first["updatedAt"])
+    ]
+
+
 # Signed agent requests (ADR-9)
 
 

@@ -61,7 +61,20 @@ export type Fact = {
   verified: string
   limits: string
   stories: Story[]
+  /** Working-set facts only. Unsaved facts and published snapshots have no dates. */
+  createdAt?: string
+  updatedAt?: string
 }
+
+/** The fields the agent sees, in a fixed order, for comparing a draft with what's published. */
+export const factContent = ({ section, topic, level, verified, limits, stories }: Fact) => ({
+  section,
+  topic,
+  level,
+  verified,
+  limits,
+  stories,
+})
 
 export type FactsVersion = { number: number; publishedAt: string; facts: Fact[] }
 
@@ -88,6 +101,7 @@ export interface AdminApi {
 const wait = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms))
 const daysFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString()
 const clone = <T>(value: T): T => structuredClone(value)
+const snapshot = (fact: Fact): Fact => clone({ id: fact.id, ...factContent(fact) })
 
 let conversations: Conversation[] = [
   {
@@ -143,6 +157,8 @@ const seedFacts: Fact[] = [
     verified: 'Senior software engineer doing full-stack work and AI integration.',
     limits: "Don't discuss availability, start dates, pay or offers. Send those to Lee.",
     stories: [],
+    createdAt: daysFromNow(-120),
+    updatedAt: daysFromNow(-100),
   },
   {
     id: 'f2',
@@ -160,14 +176,16 @@ const seedFacts: Fact[] = [
         result: 'Sample result, with a number Lee confirmed.',
       },
     ],
+    createdAt: daysFromNow(-3),
+    updatedAt: daysFromNow(-3),
   },
 ]
 
 let facts: FactsState = {
   working: clone(seedFacts),
   versions: [
-    { number: 1, publishedAt: daysFromNow(-5), facts: clone(seedFacts.slice(0, 1)) },
-    { number: 2, publishedAt: daysFromNow(-2), facts: clone(seedFacts) },
+    { number: 1, publishedAt: daysFromNow(-5), facts: seedFacts.slice(0, 1).map(snapshot) },
+    { number: 2, publishedAt: daysFromNow(-2), facts: seedFacts.map(snapshot) },
   ],
 }
 
@@ -184,7 +202,7 @@ function publish(working: Fact[]): FactsState {
   const number = (facts.versions.at(-1)?.number ?? 0) + 1
   facts = {
     working: clone(working),
-    versions: [...facts.versions, { number, publishedAt: new Date().toISOString(), facts: clone(working) }],
+    versions: [...facts.versions, { number, publishedAt: new Date().toISOString(), facts: working.map(snapshot) }],
   }
   return clone(facts)
 }
@@ -227,7 +245,8 @@ export const mockAdminApi: AdminApi = {
   async saveFact(fact) {
     await wait()
     const exists = facts.working.some((f) => f.id === fact.id)
-    const saved = fact.id ? fact : { ...fact, id: newId('f') }
+    const now = new Date().toISOString()
+    const saved = { ...fact, id: fact.id || newId('f'), createdAt: fact.createdAt ?? now, updatedAt: now }
     facts = {
       ...facts,
       working: exists
@@ -249,7 +268,13 @@ export const mockAdminApi: AdminApi = {
     await wait()
     const version = facts.versions.find((v) => v.number === versionNumber)
     if (!version) throw new Error('No such version')
-    return publish(version.facts)
+    const now = new Date().toISOString()
+    return publish(
+      version.facts.map((f) => {
+        const before = facts.working.find((w) => w.id === f.id)
+        return { ...f, createdAt: before?.createdAt ?? now, updatedAt: before?.updatedAt ?? now }
+      }),
+    )
   },
 }
 
@@ -278,7 +303,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return response.json() as Promise<T>
 }
 
-const factBody = ({ id: _id, ...fact }: Fact) => fact
+const factBody = factContent
 
 /** Facts on cloud-run (ADR-21). Every call sends the ID token, which cloud-run checks. */
 export const cloudRunFactsApi: Pick<AdminApi, 'getFacts' | 'saveFact' | 'deleteFact' | 'publishFacts' | 'rollbackFacts'> =
