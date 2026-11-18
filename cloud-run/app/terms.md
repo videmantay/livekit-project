@@ -6,7 +6,7 @@ This conversation is with an AI avatar of $owner_name ($legal_name). It is not t
 
 **This conversation is saved.** Your speech is converted to text. The transcript and any contact details you give are stored, summarized by AI, and reviewed by $owner_name. No audio or video of you is saved by this site.
 
-**Other companies process this conversation** so the avatar can work: LiveKit (real-time connection), Tavus (avatar video), ElevenLabs (voice and speech-to-text), and Google (AI responses and data storage). Your speech and the transcript pass through their systems under their own terms.
+**Other companies process this conversation** so the avatar can work, each under its own terms: LiveKit (real-time connection) and AssemblyAI (speech-to-text) receive your speech, Google (AI responses and data storage) receives the transcript, and ElevenLabs (the avatar's voice) and Tavus (the avatar's video) receive only the avatar's replies.
 
 **Your data is deleted after $retention_days days.** To have it deleted sooner, email $contact_email.
 

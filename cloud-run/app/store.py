@@ -75,6 +75,7 @@ def redeem_invite(
     db: firestore.Client,
     code: str,
     terms_version: str,
+    terms_language: str,
     contact: dict | None,
     retention_days: int,
 ) -> str | None:
@@ -87,6 +88,8 @@ def redeem_invite(
         "invite_id": invite_id,
         "status": "created",
         "terms_version": terms_version,
+        # The language the visitor agreed in, so Lee can show which text they read (ADR-4).
+        "terms_language": terms_language,
         "terms_accepted_at": now,
         "created_at": now,
         "delete_at": delete_at,

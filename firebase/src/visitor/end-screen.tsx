@@ -1,5 +1,7 @@
 import type { CallEnd } from './call-screen'
-import { LinkedInLink, PageHeader, VisitorPage } from './layout'
+import { Button } from '@/components/ui/button'
+import { LINKEDIN_URL } from '@/lib/config'
+import { PageHeader, VisitorPage } from './layout'
 
 export type EndReason = CallEnd | 'mic-denied'
 
@@ -29,8 +31,18 @@ export function EndScreen({ reason }: { reason: EndReason }) {
       <PageHeader title={title}>
         <p>{body}</p>
       </PageHeader>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button asChild size="lg">
+          <a href="/">Back to Lee’s home page</a>
+        </Button>
+        <Button asChild size="lg" variant="outline">
+          <a href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
+            Message Lee on LinkedIn
+          </a>
+        </Button>
+      </div>
       <p className="text-muted-foreground">
-        To reach the real Lee, or to ask for another session, message <LinkedInLink />.
+        To reach the real Lee, or to ask for another session, message Lee on LinkedIn.
       </p>
     </VisitorPage>
   )

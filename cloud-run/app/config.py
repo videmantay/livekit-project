@@ -1,12 +1,16 @@
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal, get_args
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Local development only. Real environment variables win, and Cloud Run has no file.
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+# Every language with a terms file in app/. Offering one is a separate setting (ADR-20).
+TermsLanguage = Literal["en", "es"]
 
 
 class Settings(BaseSettings):
@@ -29,6 +33,9 @@ class Settings(BaseSettings):
     owner_name: str
     terms_legal_name: str
     terms_contact_email: str
+    # Comma-separated languages the terms are offered in. A language goes on only after its
+    # text is reviewed, so Spanish stays off until then (ADR-20). English is always offered.
+    terms_languages: str = "en"
 
     # The one Google account allowed into admin (ADR-10). From config, never code.
     admin_email: str
@@ -53,9 +60,21 @@ class Settings(BaseSettings):
     max_session_minutes: int = 6
     rate_limit_per_minute: int = 10
 
+    @field_validator("terms_languages")
+    @classmethod
+    def _known_terms_languages(cls, value: str) -> str:
+        codes = list(dict.fromkeys(c.strip() for c in value.split(",") if c.strip()))
+        if "en" not in codes or not set(codes) <= set(get_args(TermsLanguage)):
+            raise ValueError(f"must include en and only {', '.join(get_args(TermsLanguage))}")
+        return ",".join(codes)
+
     @property
     def origins(self) -> list[str]:
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+
+    @property
+    def offered_terms_languages(self) -> list[TermsLanguage]:
+        return self.terms_languages.split(",")  # type: ignore[return-value]  # validated above
 
 
 @lru_cache

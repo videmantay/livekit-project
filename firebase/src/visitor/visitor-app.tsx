@@ -16,7 +16,7 @@ const CallScreen = lazy(() => import('./call-screen').then((m) => ({ default: m.
 // Order is fixed by ADR-4: valid code, then terms, then POST /sessions, then the mic.
 type Step =
   | { name: 'gate'; error?: string }
-  | { name: 'terms'; code: string; terms: Terms; notice?: string }
+  | { name: 'terms'; code: string; terms: Terms; termsChanged?: boolean }
   | { name: 'contact'; code: string; terms: Terms }
   | { name: 'mic'; grant: SessionGrant; problem: MicProblem; failConnection: boolean }
   | { name: 'call'; grant: SessionGrant; stream: MediaStream; failConnection: boolean }
@@ -47,18 +47,19 @@ export function VisitorApp() {
 
     let grant: SessionGrant
     try {
-      grant = await startSessionWithRetry({ code, termsVersion: terms.version, contact })
+      grant = await startSessionWithRetry({
+        code,
+        termsVersion: terms.version,
+        termsLanguage: terms.language,
+        contact,
+      })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // Terms changed since the page loaded: fetch the current ones and ask again (I3).
+        // Terms changed since the page loaded, or their language was switched off: fetch the
+        // current ones in the same language if it's still offered, and ask again (I3).
         try {
-          const fresh = await visitorApi.verifyInvite(code)
-          setStep({
-            name: 'terms',
-            code,
-            terms: fresh,
-            notice: 'The terms have changed since you opened this page. Please read them again.',
-          })
+          const fresh = await visitorApi.verifyInvite(code, terms.language)
+          setStep({ name: 'terms', code, terms: fresh, termsChanged: true })
         } catch {
           setStep({ name: 'gate', error: GENERIC_CODE_ERROR })
         }
@@ -98,8 +99,15 @@ export function VisitorApp() {
     case 'terms':
       return (
         <TermsScreen
+          // A new key for new text, so the box is unticked again for terms not yet read (I2, I3).
+          key={step.terms.version}
           terms={step.terms}
-          notice={step.notice}
+          termsChanged={step.termsChanged}
+          onSwitchLanguage={async (language) => {
+            // Verifying again uses no session (I1), so switching costs the visitor nothing.
+            const terms = await visitorApi.verifyInvite(step.code, language)
+            setStep({ name: 'terms', code: step.code, terms })
+          }}
           onAccept={() => setStep({ name: 'contact', code: step.code, terms: step.terms })}
         />
       )

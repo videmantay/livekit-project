@@ -76,7 +76,7 @@ export const UI: Record<Locale, UiStrings> = {
     aboutLink: 'Mi experiencia',
     avatarTitle: 'Habla con mi avatar de IA',
     avatarBody:
-      '¿Tienes un código de invitación? Pregúntale a mi avatar de IA sobre mi trabajo, por voz. Por ahora, la llamada es en inglés. ¿No tienes código? Escríbeme por LinkedIn.',
+      '¿Tienes un código de invitación? Pregúntale a mi avatar de IA sobre mi trabajo, por voz. La llamada puede ser en inglés o en español. ¿No tienes código? Escríbeme por LinkedIn.',
     avatarLink: 'Introducir código',
     followTitle: 'Sígueme',
     youtubeChannel: 'Canal de YouTube',
@@ -98,7 +98,7 @@ export const UI: Record<Locale, UiStrings> = {
     aboutLink: 'Minha experiência',
     avatarTitle: 'Converse com meu avatar de IA',
     avatarBody:
-      'Tem um código de convite? Pergunte ao meu avatar de IA sobre o meu trabalho, por voz. Por enquanto, a chamada é em inglês. Não tem código? Fale comigo no LinkedIn.',
+      'Tem um código de convite? Pergunte ao meu avatar de IA sobre o meu trabalho, por voz. A chamada pode ser em inglês ou espanhol. Não tem código? Fale comigo no LinkedIn.',
     avatarLink: 'Inserir código',
     followTitle: 'Siga-me',
     youtubeChannel: 'Canal no YouTube',

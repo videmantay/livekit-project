@@ -6,8 +6,8 @@ Checks invite codes, records consent, and issues short-lived LiveKit tokens. Thi
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/invites/verify` | Checks a code without using a session, and returns the current terms (ADR-15) |
-| `POST` | `/sessions` | Records consent, uses one session, returns a LiveKit token. 503 with `Retry-After` under contention, using no session |
+| `POST` | `/invites/verify` | Checks a code without using a session, and returns the current terms in the requested `language` if it's offered, else English, plus the offered `languages` (ADR-15, ADR-20) |
+| `POST` | `/sessions` | Records consent and its `terms_language`, uses one session, returns a LiveKit token. 503 with `Retry-After` under contention, using no session |
 | `GET` | `/health` | Health check |
 | `GET` | `/admin/facts` | Working facts and every published version (admin sign-in) |
 | `POST` | `/admin/facts` | Adds a draft fact (admin sign-in) |

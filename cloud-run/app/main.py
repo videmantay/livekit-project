@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app import conversations, facts, store
 from app.admin_auth import require_admin
 from app.agent_auth import require_agent
-from app.config import Settings, get_settings
+from app.config import Settings, TermsLanguage, get_settings
 from app.livekit_tokens import create_visitor_token
 from app.rate_limit import rate_limit
 from app.store import InviteBusy, check_invite, get_db, redeem_invite
@@ -51,6 +51,8 @@ class VerifyInvite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     code: InviteCode
+    # The visitor's browser preference or their pick. A language not offered gets English.
+    language: TermsLanguage = "en"
 
 
 class StartSession(BaseModel):
@@ -58,6 +60,7 @@ class StartSession(BaseModel):
 
     code: InviteCode
     terms_version: str = Field(max_length=64)
+    terms_language: TermsLanguage = "en"
     terms_accepted: Literal[True]
     contact: Contact | None = None
 
@@ -70,21 +73,36 @@ def health() -> dict:
 # The terms come back only for a valid code, behind the same gate and rate limit, so the
 # legal name and contact email aren't one public request away (ADR-15).
 @app.post("/invites/verify", dependencies=[Depends(rate_limit)])
-def verify_invite(body: VerifyInvite, db: DbDep) -> dict:
+def verify_invite(body: VerifyInvite, settings: SettingsDep, db: DbDep) -> dict:
     if not check_invite(db, body.code):
         raise INVALID_INVITE
-    terms = get_terms()
-    return {"valid": True, "terms": {"version": terms.version, "text": terms.text}}
+    offered = settings.offered_terms_languages
+    terms = get_terms(body.language if body.language in offered else "en")
+    return {
+        "valid": True,
+        "terms": {"version": terms.version, "text": terms.text, "language": terms.language},
+        # The frontend shows a language switch only when more than one is offered.
+        "languages": offered,
+    }
 
 
 @app.post("/sessions", status_code=201, dependencies=[Depends(rate_limit)])
 def start_session(body: StartSession, settings: SettingsDep, db: DbDep) -> dict:
-    if body.terms_version != get_terms().version:
+    # A language switched off since the page loaded counts as changed terms, like a new version.
+    if (
+        body.terms_language not in settings.offered_terms_languages
+        or body.terms_version != get_terms(body.terms_language).version
+    ):
         raise HTTPException(status_code=409, detail="Terms have changed")
     contact = body.contact.model_dump(exclude_none=True) if body.contact else None
     try:
         session_id = redeem_invite(
-            db, body.code, body.terms_version, contact, settings.retention_days
+            db,
+            body.code,
+            body.terms_version,
+            body.terms_language,
+            contact,
+            settings.retention_days,
         )
     except InviteBusy:
         # Contention on one invite, not a server fault. Nothing was used, so a retry is safe.
@@ -93,7 +111,7 @@ def start_session(body: StartSession, settings: SettingsDep, db: DbDep) -> dict:
         ) from None
     if session_id is None:
         raise INVALID_INVITE
-    room, token = create_visitor_token(settings, session_id)
+    room, token = create_visitor_token(settings, session_id, body.terms_language)
     return {"room": room, "token": token, "url": settings.livekit_url}
 
 

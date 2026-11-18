@@ -57,7 +57,7 @@ As an uninvited visitor, I can see only what Lee considers public.
 As a Spanish or Portuguese speaker, I can read Lee's portfolio in my language, so I don't need English to learn about Lee's work.
 
 - ⚠️ The portfolio page is at `/es` and `/pt`, with a language switcher in the header (ADR-22). Built and type-checked, not yet tried in a browser
-- ⚠️ Those pages say the call with the avatar is in English
+- ⚠️ Those pages say the call with the avatar is in English or Spanish
 - ⬜ Lee has reviewed the Spanish and Portuguese text, and a fluent speaker has reviewed the Portuguese
 
 ## Invited visitor
@@ -160,12 +160,14 @@ As an invited visitor, I can see Lee's real language level, so the avatar's spee
 
 - ⬜ The avatar states Spanish as fluent and Portuguese as B2 (ADR-20)
 - ⚠️ The call screen shows a clip labelled "Lee's real voice, unedited". The clip isn't recorded yet.
-- ⬜ Asked to speak Portuguese or translate, the avatar stays in English, gives the level and points to the clip
-- ⬜ Spoken to in another language, the avatar replies in English
+- ⬜ Asked to speak Portuguese, the avatar stays in the call's language, gives the level and points to the clip
+- ⚠️ Spoken to in Spanish or asked for it, the avatar answers in Spanish in Lee's Spanish voice, and switches back to English on request (ADR-20). Built, not yet tried in a call
+- ⬜ Spoken to in any other language, the avatar replies in English
 - ⬜ Portuguese speech is tested against the agent's speech recognition
 - ⬜ Later: a Portuguese question can get a prepared answer, played word for word from Lee's recording
 - ⬜ Later: before the first prepared answer, I hear that it's Lee's real voice, recorded in advance, and that Lee's conversational Portuguese is about B2
-- ⬜ Later: a Portuguese question with no prepared answer gets an English reply, or Spanish if I asked for Spanish
+- ⬜ Later: a Portuguese question with no prepared answer gets a reply in the call's language, English or Spanish
+- ⚠️ I can read the terms in Spanish, opened from my browser's language, and then the call starts in Spanish (ADR-20). Built and switched off until the Spanish terms are reviewed
 - ⬜ The avatar never generates Portuguese
 
 ### I12. My invite link takes me straight in

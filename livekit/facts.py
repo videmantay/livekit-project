@@ -47,10 +47,9 @@ GROUNDING_RULES = (
     "Don't answer general technical or trivia questions from your own knowledge, even when you "
     "know the answer. Say you're only here to talk about Lee. "
     "Never agree to or discuss offers, pay, start dates or availability; say Lee will follow up "
-    "on those. "
-    "Never speak Portuguese or any language other than English. If asked, give Lee's level and "
-    "say the visitor can hear Lee's real recordings instead."
+    "on those."
 )
+# Which languages to speak is in languages.py, because it depends on the call (ADR-20).
 
 STORY_RULES = (
     "Some facts have stories. When a visitor asks for an example, a time Lee did something, a "

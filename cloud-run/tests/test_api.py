@@ -10,8 +10,10 @@ from fastapi.testclient import TestClient
 from google.api_core.exceptions import Aborted
 from google.cloud.firestore_v1.document import DocumentReference
 from google.cloud.firestore_v1.transaction import Transaction
+from pydantic import ValidationError
 from starlette.requests import Request
 
+from app.config import Settings, get_settings
 from app.main import app
 from app.rate_limit import RateLimiter, client_ip
 from app.store import hash_code
@@ -40,6 +42,83 @@ def test_terms_take_the_owner_name_from_config(client, make_invite):
     text = client.post("/invites/verify", json={"code": code}).json()["terms"]["text"]
     assert "AI avatar of Sam Example (Test Legal Name)" in text
     assert "Lee" not in text
+
+
+@pytest.fixture
+def spanish_offered():
+    settings = get_settings().model_copy(update={"terms_languages": "en,es"})
+    app.dependency_overrides[get_settings] = lambda: settings
+    yield
+    app.dependency_overrides.pop(get_settings, None)
+
+
+def test_spanish_preference_gets_english_while_spanish_is_off(client, make_invite):
+    code, _ = make_invite()
+    body = client.post("/invites/verify", json={"code": code, "language": "es"}).json()
+    assert body["terms"]["language"] == "en"
+    assert body["terms"]["version"] == get_terms("en").version
+    assert body["languages"] == ["en"]
+
+
+def test_spanish_preference_gets_spanish_terms_when_offered(client, make_invite, spanish_offered):
+    code, _ = make_invite()
+    body = client.post("/invites/verify", json={"code": code, "language": "es"}).json()
+    assert body["terms"]["language"] == "es"
+    assert body["terms"]["version"] == get_terms("es").version
+    assert "avatar de IA de Sam Example (Test Legal Name)" in body["terms"]["text"]
+    assert "$" not in body["terms"]["text"]
+    assert body["languages"] == ["en", "es"]
+
+
+def test_no_preference_gets_english_even_when_spanish_is_offered(
+    client, make_invite, spanish_offered
+):
+    code, _ = make_invite()
+    body = client.post("/invites/verify", json={"code": code}).json()
+    assert body["terms"]["language"] == "en"
+
+
+def test_unknown_language_is_refused(client, make_invite):
+    code, _ = make_invite()
+    assert client.post("/invites/verify", json={"code": code, "language": "fr"}).status_code == 422
+
+
+def test_session_records_the_terms_language(
+    client, db, make_invite, session_body, spanish_offered
+):
+    code, _ = make_invite()
+    body = session_body(code, terms_version=get_terms("es").version, terms_language="es")
+    assert client.post("/sessions", json=body).status_code == 201
+    (session,) = [
+        s.to_dict()
+        for s in db.collection("sessions").stream()
+        if s.to_dict()["invite_id"] == hash_code(code)
+    ]
+    assert session["terms_language"] == "es"
+    assert session["terms_version"] == get_terms("es").version
+
+
+def test_spanish_consent_is_refused_while_spanish_is_off(client, make_invite, session_body):
+    code, _ = make_invite()
+    body = session_body(code, terms_version=get_terms("es").version, terms_language="es")
+    response = client.post("/sessions", json=body)
+    assert response.status_code == 409
+    assert "token" not in response.json()
+
+
+def test_english_version_does_not_pass_as_spanish(
+    client, make_invite, session_body, spanish_offered
+):
+    code, _ = make_invite()
+    body = session_body(code, terms_language="es")  # carries the English version
+    assert client.post("/sessions", json=body).status_code == 409
+
+
+def test_terms_languages_must_include_english_and_known_languages():
+    for value in ("es", "en,fr"):
+        with pytest.raises(ValidationError):
+            Settings(terms_languages=value)
+    assert Settings(terms_languages=" en , es,en").terms_languages == "en,es"
 
 
 def test_docs_are_disabled(client):
@@ -174,6 +253,7 @@ def test_token_is_limited_to_one_room_and_the_microphone(client, make_invite, se
     metadata = json.loads(agent["metadata"])
     assert metadata["session_id"] == body["room"].removeprefix("session-")
     assert metadata["max_session_minutes"] == 6
+    assert metadata["terms_language"] == "en"
 
 
 def test_sessions_get_separate_rooms(client, make_invite, session_body):

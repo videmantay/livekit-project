@@ -51,5 +51,7 @@ class AgentSettings(BaseSettings):
     livekit_agent_name: str = "portfolio-twin"
     # No default voice: the twin must never fall back to a stock voice by accident.
     elevenlabs_voice_id: str
+    # Lee's Spanish voice. Required for the same reason, because the twin is bilingual (ADR-20).
+    elevenlabs_spanish_voice_id: str
     tavus_api_key: SecretStr
     tavus_face_id: str

@@ -263,7 +263,7 @@ spoken_languages:
   - topic: Spanish
     level: Near-native
     verified: Near-native; uses it for customer-facing work.
-    limits: The avatar speaks English only in the first release (ADR-17, ADR-20).
+    limits: ""
     source: resume
     reviewed: true
 

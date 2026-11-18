@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApiError, visitorApi, type Terms } from '@/lib/api'
+import { preferredTermsLanguage } from '@/lib/terms-language'
 import { LinkedInLink, PageHeader, VisitorPage } from './layout'
 import { GENERIC_CODE_ERROR, RATE_LIMIT_ERROR } from './messages'
 
@@ -29,7 +30,8 @@ export function GateScreen({
     setBusy(true)
     setError(undefined)
     try {
-      onVerified(candidate, await visitorApi.verifyInvite(candidate))
+      // The terms start in the browser's language when cloud-run offers it, else English.
+      onVerified(candidate, await visitorApi.verifyInvite(candidate, preferredTermsLanguage()))
     } catch (err) {
       // A bad link gets the same message as a bad code, and the paste box as a fallback (U1).
       setError(err instanceof ApiError && err.status === 429 ? RATE_LIMIT_ERROR : GENERIC_CODE_ERROR)

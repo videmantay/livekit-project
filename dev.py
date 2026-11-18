@@ -57,6 +57,7 @@ REQUIRED = {
         "TAVUS_FACE_ID",
         "ELEVEN_API_KEY",
         "ELEVENLABS_VOICE_ID",
+        "ELEVENLABS_SPANISH_VOICE_ID",
         "GOOGLE_API_KEY",
     ],
 }

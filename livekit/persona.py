@@ -28,6 +28,31 @@ GREETINGS: tuple[str, ...] = (
     ),
 )
 
+# The greetings for a call that starts in Spanish, because the visitor agreed to the Spanish
+# terms (ADR-20). Translated from the ones above for Lee to rewrite, with gender-neutral wording
+# about Lee. Each must say it's an AI ("IA"), and tests/test_persona.py checks that too.
+SPANISH_GREETINGS: tuple[str, ...] = (
+    (
+        "¡Hola! Soy la versión de IA de Lee, un avatar que está aquí en lugar de Lee. "
+        "Pregúntame lo que quieras sobre la experiencia laboral de Lee o sus proyectos públicos, "
+        "o lo que te ayude a saber si Lee encaja en la cultura de tu equipo."
+    ),
+    (
+        "Hola, soy una versión de IA de Lee. Te puedo contar sobre la experiencia laboral de Lee, "
+        "sus proyectos personales y sus pasatiempos. Hasta tengo algunas preguntas divertidas de "
+        "'¿Qué prefieres?'. ¿Qué te gustaría saber?"
+    ),
+    (
+        "¡Hola, gracias por pasar! Soy el avatar de IA de Lee. Estoy aquí para responder "
+        "preguntas sobre la trayectoria de Lee y cómo podría encajar en tu equipo. ¿Por dónde "
+        "quieres empezar?"
+    ),
+    (
+        "¡Hola! Soy la versión de IA de Lee. Piensa en mí como quien responde por Lee sobre su "
+        "trabajo, sus proyectos y lo que le interesa. Entonces, ¿qué tienes en mente?"
+    ),
+)
+
 # Holding lines, spoken only when the model is slow to start a reply (pacing.py). The first
 # set plays after a couple of seconds of silence, the second if it's still quiet. They're
 # heard before the answer is known, and the answer is often "that hasn't been shared", so they

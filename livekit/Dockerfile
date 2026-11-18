@@ -24,7 +24,7 @@ USER app
 # Bake the VAD and turn-detector models into the image (in the app user's cache), so the first
 # call doesn't download them. agent.py validates its settings at import, so this step gets
 # placeholder values that aren't secrets and don't reach the running container.
-RUN ELEVENLABS_VOICE_ID=build TAVUS_API_KEY=build TAVUS_FACE_ID=build \
+RUN ELEVENLABS_VOICE_ID=build ELEVENLABS_SPANISH_VOICE_ID=build TAVUS_API_KEY=build TAVUS_FACE_ID=build \
     .venv/bin/python agent.py download-files
 
 CMD [".venv/bin/python", "agent.py", "start"]

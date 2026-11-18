@@ -6,7 +6,9 @@ from livekit import api
 from app.config import Settings
 
 
-def create_visitor_token(settings: Settings, session_id: str) -> tuple[str, str]:
+def create_visitor_token(
+    settings: Settings, session_id: str, terms_language: str
+) -> tuple[str, str]:
     """Returns (room, token). The token only allows this visitor's mic in this one room."""
     room = f"session-{session_id}"
     grants = api.VideoGrants(
@@ -18,7 +20,12 @@ def create_visitor_token(settings: Settings, session_id: str) -> tuple[str, str]
         can_subscribe=True,
     )
     metadata = json.dumps(
-        {"session_id": session_id, "max_session_minutes": settings.max_session_minutes}
+        {
+            "session_id": session_id,
+            "max_session_minutes": settings.max_session_minutes,
+            # The agent starts the call in the language the visitor agreed in (ADR-20).
+            "terms_language": terms_language,
+        }
     )
     # Explicit dispatch: the agent joins only rooms that passed through this service.
     room_config = api.RoomConfiguration(

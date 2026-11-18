@@ -6,7 +6,8 @@ audio. Lee's published facts go into the prompt (facts.py), fetched from cloud-r
 start, or read from the local seed file when CLOUD_RUN_URL is unset (ADR-21). The transcript
 goes back to cloud-run in batches (transcript.py, A4).
 
-Needs GOOGLE_API_KEY, ELEVEN_API_KEY and ELEVENLABS_VOICE_ID in .env, plus
+Needs GOOGLE_API_KEY, ELEVEN_API_KEY, ELEVENLABS_VOICE_ID and ELEVENLABS_SPANISH_VOICE_ID in
+.env, plus
 TAVUS_API_KEY and TAVUS_FACE_ID for the avatar.
 
 Run it:
@@ -30,6 +31,8 @@ from livekit.agents import (
     APIStatusError,
     ConversationItemAddedEvent,
     ModelSettings,
+    RunContext,
+    function_tool,
     inference,
     llm,
     room_io,
@@ -48,8 +51,9 @@ from facts import (
     facts_prompt,
     get_published_facts,
 )
+from languages import LINES, Language, LanguageSwitch, language_rules, start_language
 from log_privacy import drop_pii_from_logs
-from persona import GREETINGS, VOICE_NOTES
+from persona import GREETINGS, SPANISH_GREETINGS, VOICE_NOTES
 from transcript import (
     Transcript,
     cloud_run_post,
@@ -87,14 +91,8 @@ GEMINI_SAFETY_SETTINGS = [
     )
 ]
 
-# Spoken in place of a reply Gemini blocked, once per blocked turn.
-BLOCKED_REPLY = "That's not something I can talk about, but I'm happy to tell you about Lee's work."
-
-# Spoken when there are no facts to answer from, then the call ends (ADR-21, A8).
-NO_FACTS_REPLY = (
-    "Hi, I'm Lee's AI twin. Sorry, I can't answer questions right now because something's "
-    "wrong on my end. Please try again later, or reach out to Lee directly."
-)
+# The fixed lines are in languages.py, one set per language: the reply in place of one Gemini
+# blocked, the no-facts reply before the call ends (ADR-21, A8), and the time-limit goodbye.
 
 
 # cloud-run sends the call's length limit in the dispatch metadata (I7). This is the fallback
@@ -104,9 +102,6 @@ DEFAULT_MAX_SESSION_MINUTES = 6.0
 # The goodbye starts this long before the limit, so it's heard in full before the call ends.
 GOODBYE_LEAD_SECONDS = 20.0
 
-TIME_UP_REPLY = (
-    "That's all the time we have for this call. Thanks so much for talking with me, and goodbye!"
-)
 
 
 def _dispatch_metadata(metadata: str) -> dict:
@@ -133,6 +128,7 @@ async def _end_at_time_limit(
     ctx: agents.JobContext,
     session: AgentSession,
     minutes: float,
+    goodbye: Callable[[], str],
     before_end: Callable[[], Awaitable[None]],
 ) -> None:
     await asyncio.sleep(max(minutes * 60 - GOODBYE_LEAD_SECONDS, 0))
@@ -140,7 +136,7 @@ async def _end_at_time_limit(
     try:
         # Queued behind any reply in progress; the timeout keeps the call from running over.
         await asyncio.wait_for(
-            session.say(TIME_UP_REPLY, allow_interruptions=False), timeout=GOODBYE_LEAD_SECONDS
+            session.say(goodbye(), allow_interruptions=False), timeout=GOODBYE_LEAD_SECONDS
         )
     except (TimeoutError, RuntimeError, APIStatusError) as error:
         # The call still ends below. RuntimeError covers a session that already closed.
@@ -179,22 +175,50 @@ async def _end_tavus_conversation(avatar: tavus.AvatarSession | None) -> None:
 
 
 class Assistant(Agent):
-    def __init__(self, facts: FactSet | None) -> None:
+    def __init__(
+        self,
+        facts: FactSet | None,
+        start: Language = "en",
+        switch_voice: Callable[[Language], None] | None = None,
+    ) -> None:
+        async def set_language(context: RunContext, language: Language) -> str:
+            """Change the language you speak, and your voice with it. Call this before you
+            answer in a different language: when the visitor asks for Spanish or speaks
+            Spanish (es), or asks for English (en).
+
+            Args:
+                language: es for Spanish, en for English.
+            """
+            before = self._languages.current
+            result = self._languages.switch(language)
+            if self._languages.current != before:
+                # The language code only, never what was said (ADR-14).
+                logger.info("language switched", extra={"language": language})
+            return result
+
         super().__init__(
             instructions=(
                 f"{VOICE_NOTES} {DELIVERY_NOTES} "
                 "Say you are an AI if asked. Keep replies to one or two short sentences, except "
-                "a story, which takes about four. Use plain spoken English, with no lists, "
+                "a story, which takes about four. Use plain spoken sentences, with no lists, "
                 "emojis or symbols.\n\n"
-                f"{GROUNDING_RULES}\n\n{STORY_RULES}\n\n{facts_prompt(facts)}"
+                f"{GROUNDING_RULES}\n\n{language_rules(start)}\n\n{STORY_RULES}\n\n"
+                f"{facts_prompt(facts)}"
                 if facts
-                # Never used to answer: with no facts the call ends after NO_FACTS_REPLY.
+                # Never used to answer: with no facts the call ends after the no-facts line.
                 else f"{VOICE_NOTES} You have no facts about Lee. Answer nothing about Lee."
             ),
+            tools=[function_tool(set_language)] if facts else [],
         )
+        self._languages = LanguageSwitch(start, switch_voice)
         # User messages Gemini blocked. They stay in the transcript but are never sent again,
         # or one blocked turn would block every turn after it.
         self._blocked_message_ids: set[str] = set()
+
+    @property
+    def language(self) -> Language:
+        """The language the call is in now, for the fixed lines."""
+        return self._languages.current
 
     def is_blocked(self, message_id: str) -> bool:
         """Marked as a violation in the transcript, so Lee sees why a call ended (A4)."""
@@ -224,7 +248,7 @@ class Assistant(Agent):
                 self._blocked_message_ids.add(user_messages[-1].id)
             # A reply blocked partway has already been spoken up to the block; don't add to it.
             if not replied:
-                yield BLOCKED_REPLY
+                yield LINES[self.language].blocked
 
     async def transcription_node(
         self, text: AsyncIterable[str | TimedString], model_settings: ModelSettings
@@ -262,7 +286,20 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         logger.error("no facts for this call", extra={"reason": str(error)})
 
     metadata = _dispatch_metadata(ctx.job.metadata)
-    assistant = Assistant(facts)
+    start = start_language(metadata)
+    # The language code only, never anything the visitor said (ADR-14).
+    logger.info("call language", extra={"start_language": start})
+    voices: dict[Language, str] = {
+        "en": settings.elevenlabs_voice_id,
+        "es": settings.elevenlabs_spanish_voice_id,
+    }
+    tts = elevenlabs.TTS(voice_id=voices[start], model=ELEVENLABS_MODEL, language=start)
+
+    def switch_voice(language: Language) -> None:
+        # The plugin drops its open connection, so the next reply uses the new voice.
+        tts.update_options(voice_id=voices[language], language=language)
+
+    assistant = Assistant(facts, start, switch_voice)
     transcript: Transcript | None = None
     session_id = session_id_from_metadata(metadata)
     post = cloud_run_post(session_id) if session_id else None
@@ -278,7 +315,10 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         _transcripts[ctx.job.id] = transcript
 
     session = AgentSession(
-        stt=inference.STT(model="assemblyai/universal-3-6-pro", language="en"),
+        # No language set, so the model detects English or Spanish by itself and a request made
+        # in Spanish is understood (docs.livekit.io/agents/models/stt/assemblyai/: Universal-3.6
+        # Pro detects the spoken language and code-switches).
+        stt=inference.STT(model="assemblyai/universal-3-6-pro"),
         # Minimal thinking keeps voice replies fast. Gemini 3 takes a level only; there is no
         # time cap. Raise to "low" only if answers from the fact file need more reasoning.
         llm=google.LLM(
@@ -288,10 +328,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             temperature=0,
             safety_settings=GEMINI_SAFETY_SETTINGS,
         ),
-        # English only (ADR-20).
-        tts=elevenlabs.TTS(
-            voice_id=settings.elevenlabs_voice_id, model=ELEVENLABS_MODEL, language="en"
-        ),
+        # Lee's English or Spanish voice, switched by set_language (ADR-20).
+        tts=tts,
         # The defaults, plus the allowlist that drops any tag not in delivery.ALLOWED_TAGS.
         tts_text_transforms=["filter_markdown", "filter_emoji", allow_listed_tags_only],
         # Explicit, though it matches the SDK default, so a default change can't alter it quietly.
@@ -313,7 +351,13 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     # Started before the avatar and greeting, so time spent joining counts toward the limit.
     time_limit = asyncio.create_task(
-        _end_at_time_limit(ctx, session, _max_session_minutes(metadata), _finish_transcript)
+        _end_at_time_limit(
+            ctx,
+            session,
+            _max_session_minutes(metadata),
+            lambda: LINES[assistant.language].time_up,
+            _finish_transcript,
+        )
     )
 
     async def _cancel_time_limit() -> None:
@@ -355,10 +399,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     # Lee's own words, spoken as written, and not interruptible so the AI disclosure is always
     # heard in full (ADR-8, I6).
     if facts is None:
-        await session.say(NO_FACTS_REPLY, allow_interruptions=False)
+        await session.say(LINES[start].no_facts, allow_interruptions=False)
         ctx.shutdown(reason="no facts")
         return
-    await session.say(random.choice(GREETINGS), allow_interruptions=False)
+    greetings = SPANISH_GREETINGS if start == "es" else GREETINGS
+    await session.say(random.choice(greetings), allow_interruptions=False)
 
 
 if __name__ == "__main__":
