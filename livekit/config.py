@@ -53,11 +53,14 @@ class AgentSettings(BaseSettings):
     elevenlabs_voice_id: str
     # Lee's Spanish voice. Required for the same reason, because the twin is bilingual (ADR-20).
     elevenlabs_spanish_voice_id: str
-    # The stock voice that speaks only while ElevenLabs is failing, so the visitor hears a
-    # different voice instead of silence. A deliberate fallback, never a silent default for
-    # Lee's own voice above. LiveKit Inference, so no extra key. Cartesia Sonic 3 speaks
-    # English and Spanish with one voice; this one is the docs' own fallback example.
-    backup_tts_model: str = "cartesia/sonic-3"
-    backup_tts_voice: str = "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
+    # Stock voices that speak only while Lee's voice is failing, so the visitor hears a
+    # different voice instead of silence. Deliberate fallbacks, never a silent default for
+    # Lee's own voice above. Both are male and speak English and Spanish.
+    # First an ElevenLabs library voice, for a problem with Lee's cloned voice alone.
+    backup_elevenlabs_voice_id: str = "zs057lc0shdaAFXkm2Fm"
+    # Then a voice on another provider, for when ElevenLabs itself is down. LiveKit Inference,
+    # so no extra key. Cartesia Sonic 3 "Blake".
+    last_resort_tts_model: str = "cartesia/sonic-3"
+    last_resort_tts_voice: str = "a167e0f3-df7e-4d52-a9c3-f949145efdab"
     tavus_api_key: SecretStr
     tavus_face_id: str

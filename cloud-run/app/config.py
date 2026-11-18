@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     token_ttl_seconds: int = 300
     # 6 for the beta. Must match firebase's MAX_SESSION_MINUTES.
     max_session_minutes: int = 6
+    # Calls allowed at once. Set to the lowest provider limit: Tavus allows one conversation at
+    # a time on the current plan. A start past it gets a 503 before any session is used (I9).
+    max_concurrent_calls: int = Field(default=1, ge=1, le=50)
     rate_limit_per_minute: int = 10
 
     @field_validator("terms_languages")

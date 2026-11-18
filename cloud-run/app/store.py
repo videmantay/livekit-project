@@ -5,12 +5,34 @@ from functools import lru_cache
 
 from google.api_core.exceptions import Aborted
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from app.config import get_settings
 
 
 class InviteBusy(Exception):
     """Every transaction attempt hit contention. Nothing was written, so no session was used."""
+
+
+class LineBusy(Exception):
+    """The most calls allowed at once are live. Nothing was written, so no session was used."""
+
+
+class NoSuchSession(Exception):
+    pass
+
+
+# A session counts as live until it ends, or until it's older than the longest call plus this.
+# The grace covers a call whose end never arrived: a visitor who never joined the room gets no
+# room_finished webhook, and a dead agent sends no final batch.
+LIVE_CALL_GRACE = timedelta(minutes=2)
+
+
+def _live_calls(transaction, db: firestore.Client, now: datetime, max_session_minutes: int) -> int:
+    cutoff = now - timedelta(minutes=max_session_minutes) - LIVE_CALL_GRACE
+    # One range filter on one field, so the default single-field index covers it.
+    recent = db.collection("sessions").where(filter=FieldFilter("created_at", ">=", cutoff))
+    return sum(1 for s in transaction.get(recent) if s.to_dict().get("status") != "ended")
 
 
 @lru_cache
@@ -60,10 +82,16 @@ def check_invite(db: firestore.Client, code: str) -> bool:
 
 
 @firestore.transactional
-def _redeem(transaction, invite_ref, session_ref, contact_ref, session, contact) -> bool:
+def _redeem(
+    transaction, db, invite_ref, session_ref, contact_ref, session, contact, limits
+) -> bool:
     invite = invite_ref.get(transaction=transaction).to_dict()
     if not _is_usable(invite):
         return False
+    # In the same transaction as the write, so two starts at once can't both pass the limit.
+    max_calls, max_session_minutes = limits
+    if _live_calls(transaction, db, session["created_at"], max_session_minutes) >= max_calls:
+        raise LineBusy
     transaction.update(invite_ref, {"sessions_used": invite["sessions_used"] + 1})
     transaction.set(session_ref, session)
     if contact:
@@ -78,8 +106,14 @@ def redeem_invite(
     terms_language: str,
     contact: dict | None,
     retention_days: int,
+    max_concurrent_calls: int,
+    max_session_minutes: int,
 ) -> str | None:
-    """Uses one session from the invite and records consent. Returns None if unusable."""
+    """Uses one session from the invite and records consent. Returns None if unusable.
+
+    Raises LineBusy when `max_concurrent_calls` calls are already live, and InviteBusy on
+    contention. Nothing is written in either case.
+    """
     now = datetime.now(UTC)
     delete_at = now + timedelta(days=retention_days)
     invite_id = hash_code(code)
@@ -99,11 +133,13 @@ def redeem_invite(
     try:
         redeemed = _redeem(
             db.transaction(),
+            db,
             db.collection("invites").document(invite_id),
             db.collection("sessions").document(session_id),
             db.collection("contacts").document(session_id),
             session,
             contact_doc,
+            (max_concurrent_calls, max_session_minutes),
         )
     except Aborted as exc:
         # An abort during the read isn't retried by the library, so it arrives bare.
@@ -114,6 +150,45 @@ def redeem_invite(
             raise InviteBusy from exc
         raise
     return session_id if redeemed else None
+
+
+@firestore.transactional
+def _release(transaction, db, session_ref) -> bool:
+    snapshot = session_ref.get(transaction=transaction)
+    if not snapshot.exists:
+        raise NoSuchSession
+    data = snapshot.to_dict()
+    if data.get("released"):
+        return False
+    invite_ref = db.collection("invites").document(data["invite_id"])
+    invite = invite_ref.get(transaction=transaction)
+    now = datetime.now(UTC)
+    update: dict = {"released": True, "released_at": now}
+    if data["status"] != "ended":
+        # Ended here, so the call stops counting as live and no summary is written for it.
+        update |= {
+            "status": "ended",
+            "ended_at": now,
+            "end_reason": "agent_failed",
+            "summary": "",
+            "declined_questions": [],
+            "summary_status": "empty",
+        }
+    transaction.update(session_ref, update)
+    if invite.exists:
+        used = invite.to_dict()["sessions_used"]
+        transaction.update(invite_ref, {"sessions_used": max(used - 1, 0)})
+    return True
+
+
+def release_session(db: firestore.Client, session_id: str) -> bool:
+    """Gives a failed call's session back to its invite, once (I7, I9).
+
+    The agent calls this when the call ended before the visitor heard anything. Returns False
+    if it was already released, so a replayed request changes nothing (ADR-9). Raises
+    NoSuchSession for an unknown ID.
+    """
+    return _release(db.transaction(), db, db.collection("sessions").document(session_id))
 
 
 def _invite_view(invite_id: str, invite: dict) -> dict:

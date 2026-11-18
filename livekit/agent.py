@@ -2,7 +2,8 @@
 
 Pipeline: LiveKit Inference STT -> Gemini 3.5 Flash (Google plugin, own key)
 -> ElevenLabs TTS (plugin, own key) -> Tavus avatar, which lip-syncs to that
-audio. If ElevenLabs fails, a stock LiveKit Inference voice speaks until it recovers; if Tavus
+audio. If Lee's voice fails, a stock ElevenLabs voice speaks until it recovers, then a
+LiveKit Inference voice if ElevenLabs itself is down; if Tavus
 fails, the call goes on with voice only. Either way the call screen tells the visitor
 (service_notices.py). Lee's published facts go into the prompt (facts.py), fetched from cloud-run at each call
 start, or read from the local seed file when CLOUD_RUN_URL is unset (ADR-21). The transcript
@@ -30,6 +31,7 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
+    AgentStateChangedEvent,
     APIError,
     APIStatusError,
     ConversationItemAddedEvent,
@@ -45,7 +47,8 @@ from livekit.agents.voice.io import TimedString
 from livekit.plugins import ai_coustics, elevenlabs, google, silero, tavus
 
 import service_notices
-from config import AgentSettings
+from cloud_run import release_session
+from config import AgentSettings, CloudRunSettings
 from delivery import DELIVERY_NOTES, allow_listed_tags_only, without_tags
 from facts import (
     GROUNDING_RULES,
@@ -86,6 +89,9 @@ AVATAR_JOIN_TIMEOUT_SECONDS = 30.0
 # seconds of silence for the visitor. The adapter keeps probing ElevenLabs in the background
 # and goes back to it as soon as it answers.
 TTS_RETRIES_BEFORE_BACKUP = 0
+
+# Shutdown callbacks share the job's shutdown window, so the release can't wait long.
+RELEASE_TIMEOUT_SECONDS = 5.0
 
 # Strictest level on every adjustable Gemini filter. Unset categories default to off on Gemini
 # 2.5 and later. Gemini has no profanity or child-safe filter, so the prompt covers those.
@@ -181,6 +187,24 @@ async def _end_tavus_conversation(avatar: tavus.AvatarSession | None) -> None:
                 logger.warning("tavus end failed", extra={"status": response.status})
     except (aiohttp.ClientError, TimeoutError) as error:
         logger.warning("tavus end failed", extra={"error": type(error).__name__})
+
+
+async def _release_session(session_id: str | None) -> None:
+    cloud = CloudRunSettings()
+    if not session_id or not cloud.cloud_run_url:
+        # Local runs have no invite to give back.
+        return
+    try:
+        status = await release_session(
+            cloud.cloud_run_url,
+            cloud.agent_signing_secret.get_secret_value().encode(),
+            session_id,
+            RELEASE_TIMEOUT_SECONDS,
+        )
+        # The status only: never the session ID or anything about the visitor (ADR-14).
+        logger.info("session release sent", extra={"status": status})
+    except (aiohttp.ClientError, TimeoutError) as error:
+        logger.warning("session release failed", extra={"error": type(error).__name__})
 
 
 async def _set_notice(room: rtc.Room, key: str, value: str) -> None:
@@ -350,24 +374,31 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "es": settings.elevenlabs_spanish_voice_id,
     }
     lee_voice = elevenlabs.TTS(voice_id=voices[start], model=ELEVENLABS_MODEL, language=start)
-    backup_voice = inference.TTS(
-        model=settings.backup_tts_model,
-        voice=settings.backup_tts_voice,
+    backup_voice = elevenlabs.TTS(
+        voice_id=settings.backup_elevenlabs_voice_id, model=ELEVENLABS_MODEL, language=start
+    )
+    last_resort_voice = inference.TTS(
+        model=settings.last_resort_tts_model,
+        voice=settings.last_resort_tts_voice,
         language=start,
-        # Word timings, so captions stay in step with the backup voice too. Cartesia only.
+        # Word timings, so captions stay in step with this voice too. Cartesia only.
         extra_kwargs=(
-            {"add_timestamps": True} if settings.backup_tts_model.startswith("cartesia/") else {}
+            {"add_timestamps": True}
+            if settings.last_resort_tts_model.startswith("cartesia/")
+            else {}
         ),
     )
-    # Lee's voice first. When ElevenLabs fails, the backup voice speaks until it recovers.
+    # Lee's voice first. When it fails, the next voice that works speaks until it recovers.
     tts = agent_tts.FallbackAdapter(
-        [lee_voice, backup_voice], max_retry_per_tts=TTS_RETRIES_BEFORE_BACKUP
+        [lee_voice, backup_voice, last_resort_voice],
+        max_retry_per_tts=TTS_RETRIES_BEFORE_BACKUP,
     )
 
     def switch_voice(language: Language) -> None:
         # The plugin drops its open connection, so the next reply uses the new voice.
         lee_voice.update_options(voice_id=voices[language], language=language)
         backup_voice.update_options(language=language)
+        last_resort_voice.update_options(language=language)
 
     notice_tasks: set[asyncio.Task[None]] = set()
 
@@ -423,6 +454,25 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         turn_detection=inference.TurnDetector(),
         use_tts_aligned_transcript=True,
     )
+
+    # A call that fails before it starts mustn't cost the visitor one of the invite's sessions
+    # (I7, I9). At the end, the session goes back to the invite if the visitor never heard the
+    # agent speak, or heard only the no-facts line.
+    heard_agent = False
+
+    @session.on("agent_state_changed")
+    def _on_agent_state(event: AgentStateChangedEvent) -> None:
+        nonlocal heard_agent
+        if event.new_state == "speaking":
+            heard_agent = True
+
+    async def _release_if_unheard() -> None:
+        if heard_agent and facts is not None:
+            return
+        logger.info("call ended before it started, releasing the session")
+        await _release_session(session_id)
+
+    ctx.add_shutdown_callback(_release_if_unheard)
 
     if transcript is not None:
 

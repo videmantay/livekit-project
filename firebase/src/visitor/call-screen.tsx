@@ -20,6 +20,7 @@ import {
   type RemoteParticipant,
 } from 'livekit-client'
 import { Mic, MicOff, PhoneOff } from 'lucide-react'
+import { AgentAudioVisualizerAura } from '@/components/agent-audio-visualizer-aura'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { SessionGrant } from '@/lib/api'
@@ -108,7 +109,7 @@ function LiveCall({ stream, onEnd }: { stream: MediaStream; onEnd: (end: CallEnd
   const room = useRoomContext()
   const connection = useConnectionState()
   const { localParticipant } = useLocalParticipant()
-  const { videoTrack, agentAttributes } = useVoiceAssistant()
+  const { videoTrack, audioTrack, state: agentState, agentAttributes } = useVoiceAssistant()
   const notices = serviceNotices(agentAttributes)
   const voiceOnly = agentAttributes?.[VIDEO_NOTICE] === 'unavailable'
   const transcriptions = useTranscriptions()
@@ -174,8 +175,23 @@ function LiveCall({ stream, onEnd }: { stream: MediaStream; onEnd: (end: CallEnd
           videoTrack ? (
             <VideoTrack trackRef={videoTrack} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              {voiceOnly && !status ? 'Voice only' : status}
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+              {voiceOnly && !status ? (
+                <>
+                  {/* Moves with the agent's voice and state, so the call still feels alive. */}
+                  <AgentAudioVisualizerAura
+                    size="lg"
+                    state={agentState}
+                    audioTrack={audioTrack}
+                    themeMode="light"
+                    className="max-h-[70%]"
+                    aria-hidden
+                  />
+                  <span className="text-sm">Voice only</span>
+                </>
+              ) : (
+                status
+              )}
             </div>
           )
         }

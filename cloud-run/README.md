@@ -7,7 +7,7 @@ Checks invite codes, records consent, and issues short-lived LiveKit tokens. Thi
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/invites/verify` | Checks a code without using a session, and returns the current terms in the requested `language` if it's offered, else English, plus the offered `languages` (ADR-15, ADR-20) |
-| `POST` | `/sessions` | Records consent and its `terms_language`, uses one session, returns a LiveKit token. 503 with `Retry-After` under contention, using no session |
+| `POST` | `/sessions` | Records consent and its `terms_language`, uses one session, returns a LiveKit token. 503 with `Retry-After` under contention, or while `MAX_CONCURRENT_CALLS` calls are live, using no session |
 | `GET` | `/health` | Health check |
 | `GET` | `/admin/facts` | Working facts and every published version (admin sign-in) |
 | `POST` | `/admin/facts` | Adds a draft fact (admin sign-in) |
@@ -22,6 +22,7 @@ Checks invite codes, records consent, and issues short-lived LiveKit tokens. Thi
 | `POST` | `/admin/invites/{id}/revoke` | Stops a code working at once (admin sign-in) |
 | `GET` | `/internal/facts` | The live published version, never drafts (signed by the agent) |
 | `POST` | `/internal/sessions/{id}/transcript` | One batch of turns. `final: true` ends the call and writes the summary. 409 for a batch number already stored, or after the call ended (signed by the agent) |
+| `POST` | `/internal/sessions/{id}/release` | The call ended before the visitor heard anything: gives the session back to the invite and ends the call, once per session (signed by the agent) |
 | `POST` | `/webhooks/livekit` | LiveKit's `room_finished`, which ends and summarizes a call the agent didn't (signed by LiveKit) |
 
 Admin routes need `Authorization: Bearer <Google ID token>` for `ADMIN_EMAIL`. Internal routes need the agent's HMAC signature, made with `AGENT_SIGNING_SECRET` (see `app/agent_auth.py`). The webhook needs LiveKit's signature, made with the project's API key and secret.

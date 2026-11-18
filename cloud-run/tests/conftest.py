@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.config import Settings
+from app.config import Settings, get_settings
 
 # Tests are hermetic: no real config from cloud-run/.env or the shell.
 Settings.model_config["env_file"] = None
@@ -37,6 +37,17 @@ from app.terms import get_terms
 def require_emulator():
     if not os.environ.get("FIRESTORE_EMULATOR_HOST"):
         pytest.exit("Run through the Firestore emulator. See cloud-run/README.md.", returncode=2)
+
+
+@pytest.fixture(autouse=True)
+def no_call_limit():
+    """Tests share one emulator database and leave calls live, so the limit is lifted here.
+    tests/test_call_limits.py sets it back to 1 on a cleared database. model_copy skips the
+    field's bounds on purpose."""
+    settings = get_settings().model_copy(update={"max_concurrent_calls": 1_000_000})
+    app.dependency_overrides[get_settings] = lambda: settings
+    yield
+    app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.fixture

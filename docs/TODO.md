@@ -15,6 +15,7 @@ Story numbers refer to [STORIES.md](STORIES.md), and ADR numbers to [ADRS.md](AD
 
 - [ ] Create the LiveKit, Tavus, ElevenLabs and Firebase production setup
 - [ ] Have a lawyer review the terms, including recording consent and AI disclosure rules
+- [ ] Check the voice-only orb's license before the open-source release: `firebase/src/components/agent-audio-visualizer-aura.tsx` is © UNCRN LLC under the Polyform Non-Resale License 1.0.0, not the repo's license. Keep it, or swap in another LiveKit Agents UI visualizer (bar, grid, radial or wave) after checking its license
 - [ ] Run one full call end to end, then tag `v0.1.0` on `main` (ADR-18)
 
 ## Open-source release

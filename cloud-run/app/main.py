@@ -13,7 +13,7 @@ from app.agent_auth import require_agent
 from app.config import Settings, TermsLanguage, get_settings
 from app.livekit_tokens import create_visitor_token
 from app.rate_limit import rate_limit
-from app.store import InviteBusy, check_invite, get_db, redeem_invite
+from app.store import InviteBusy, LineBusy, check_invite, get_db, redeem_invite
 from app.terms import get_terms
 
 InviteCode = Annotated[str, Field(min_length=1, max_length=64)]
@@ -103,7 +103,15 @@ def start_session(body: StartSession, settings: SettingsDep, db: DbDep) -> dict:
             body.terms_language,
             contact,
             settings.retention_days,
+            settings.max_concurrent_calls,
+            settings.max_session_minutes,
         )
+    except LineBusy:
+        # Every call slot is in use (Tavus allows one at a time). Nothing was used, so the
+        # visitor can retry; the frontend shows its "line is busy" message (I9).
+        raise HTTPException(
+            status_code=503, detail="Line busy, try again", headers={"Retry-After": "30"}
+        ) from None
     except InviteBusy:
         # Contention on one invite, not a server fault. Nothing was used, so a retry is safe.
         raise HTTPException(
@@ -195,6 +203,18 @@ def add_transcript_batch(
     if body.final:
         conversations.end_session(db, settings, session_id, "agent")
     return {"stored": True}
+
+
+@internal.post("/sessions/{session_id}/release")
+def release_session(session_id: SessionId, db: DbDep) -> dict:
+    """The call ended before the visitor heard anything, so its session goes back to the
+    invite and the call ends (I7, I9). Once per session: a replay finds it released and
+    changes nothing (ADR-9)."""
+    try:
+        released = store.release_session(db, session_id)
+    except store.NoSuchSession:
+        raise HTTPException(status_code=404, detail="No such session") from None
+    return {"released": released}
 
 
 # Admin: conversations and invites (A1, A2, A6, A7).
