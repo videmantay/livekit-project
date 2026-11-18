@@ -39,7 +39,6 @@ from livekit.agents import (
 )
 from livekit.agents.voice.io import TimedString
 from livekit.plugins import ai_coustics, elevenlabs, google, silero, tavus
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 from config import AgentSettings
 from delivery import DELIVERY_NOTES, allow_listed_tags_only, without_tags
@@ -334,7 +333,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         tts_text_transforms=["filter_markdown", "filter_emoji", allow_listed_tags_only],
         # Explicit, though it matches the SDK default, so a default change can't alter it quietly.
         vad=silero.VAD.load(),
-        turn_detection=MultilingualModel(),
+        turn_detection=inference.TurnDetector(),
         use_tts_aligned_transcript=True,
     )
 
