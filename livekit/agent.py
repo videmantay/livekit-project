@@ -27,7 +27,6 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
-    APIConnectOptions,
     APIError,
     APIStatusError,
     ConversationItemAddedEvent,
@@ -52,7 +51,7 @@ from facts import (
     get_published_facts,
 )
 from log_privacy import drop_pii_from_logs
-from pacing import HoldingLine, ReplyTimeout, has_words, paced
+from pacing import LLM_CONN_OPTIONS, HoldingLine, ReplyTimeout, has_words, paced
 from persona import GREETINGS, STILL_THINKING_LINES, THINKING_LINES, VOICE_NOTES
 from transcript import (
     Transcript,
@@ -98,9 +97,7 @@ BLOCKED_REPLY = "That's not something I can talk about, but I'm happy to tell yo
 # up on (pacing.py). The SDK's own retries fit inside the limit, below.
 THINKING_STAGES = ((2.0, THINKING_LINES), (6.5, STILL_THINKING_LINES))
 REPLY_LIMIT_SECONDS = 12.0
-# One retry, each attempt waiting at most 5 seconds for Gemini to start sending. The SDK
-# default (10 seconds, 3 retries) left a visitor in silence for up to 46 seconds.
-LLM_CONN_OPTIONS = APIConnectOptions(timeout=5.0, max_retry=1, retry_interval=0.5)
+# LLM_CONN_OPTIONS (pacing.py) sets Gemini's deadline and retries.
 
 # Spoken when the model failed or gave nothing, instead of leaving the visitor in silence.
 TROUBLE_REPLY = "Sorry, I lost my train of thought there. Could you ask me that again?"

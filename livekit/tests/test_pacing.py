@@ -3,7 +3,14 @@ import asyncio
 import pytest
 from livekit.agents import llm
 
-from pacing import HoldingLine, ReplyTimeout, has_words, paced
+from pacing import (
+    GEMINI_MIN_DEADLINE_SECONDS,
+    LLM_CONN_OPTIONS,
+    HoldingLine,
+    ReplyTimeout,
+    has_words,
+    paced,
+)
 
 # Short times, so the tests run fast. The real ones are in agent.py.
 STAGES = ((0.05, ("thinking",)), (0.15, ("still thinking",)))
@@ -97,3 +104,9 @@ def test_has_words() -> None:
     assert has_words(chunk("hi"))
     assert not has_words(chunk(None))
 
+
+
+def test_gemini_deadline_is_one_gemini_accepts():
+    # Gemini answers a deadline under 10 seconds with a 400, and every turn became the
+    # trouble reply. Measured, not assumed: the API error names the minimum.
+    assert LLM_CONN_OPTIONS.timeout >= GEMINI_MIN_DEADLINE_SECONDS >= 10.0

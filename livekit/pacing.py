@@ -12,7 +12,18 @@ import asyncio
 import random
 from collections.abc import AsyncIterable, AsyncIterator, Sequence
 
-from livekit.agents import llm
+from livekit.agents import APIConnectOptions, llm
+
+# The Google plugin sends `timeout` to Gemini as the request deadline, and Gemini rejects any
+# deadline under 10 seconds with a 400, so a lower value fails every turn before it starts.
+# The deadline covers the whole streamed reply, not just the first words.
+GEMINI_MIN_DEADLINE_SECONDS = 10.0
+
+# One retry, for fast failures such as a 503. The SDK default (3 retries) left a visitor in
+# silence for up to 46 seconds; `paced`'s give-up limit caps the wait anyway.
+LLM_CONN_OPTIONS = APIConnectOptions(
+    timeout=GEMINI_MIN_DEADLINE_SECONDS, max_retry=1, retry_interval=0.5
+)
 
 
 class ReplyTimeout(TimeoutError):
